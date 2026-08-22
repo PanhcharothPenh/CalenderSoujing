@@ -28,9 +28,19 @@ REMINDER_MINUTES = int(os.getenv("REMINDER_MINUTES", "15"))
 DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "07:00")
 SUBSCRIBERS_FILE = BASE_DIR / "subscribers.json"
 
+def has_inline_json_credentials() -> bool:
+    """Check if any environment variable contains Service Account JSON data."""
+    for key, val in os.environ.items():
+        if not val:
+            continue
+        v_strip = val.strip()
+        if ("service_account" in v_strip or "private_key" in v_strip) and "{" in v_strip:
+            return True
+    return False
+
 def get_credentials_path() -> Path:
     val = GOOGLE_SERVICE_ACCOUNT_FILE.strip()
-    if val.startswith("{") or "service_account" in val:
+    if val.startswith("{") or "service_account" in val or "private_key" in val:
         # If user pasted raw JSON into GOOGLE_SERVICE_ACCOUNT_FILE instead of GOOGLE_SERVICE_ACCOUNT_JSON
         return BASE_DIR / "credentials.json"
     path = Path(val)
@@ -93,14 +103,7 @@ def validate_config() -> list:
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "your_telegram_bot_token_here":
         missing.append("TELEGRAM_BOT_TOKEN")
     
-    json_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
-    file_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "").strip()
-    
-    has_json_env = (
-        (json_env and (json_env.startswith("{") or json_env.startswith("'") or json_env.startswith('"'))) or 
-        (file_env and (file_env.startswith("{") or file_env.startswith("'") or file_env.startswith('"')))
-    )
-    
+    has_json_env = has_inline_json_credentials()
     cred_path = get_credentials_path()
     if not has_json_env and not cred_path.exists():
         missing.append("Google Service Account Credentials (credentials.json or GOOGLE_SERVICE_ACCOUNT_JSON env var)")

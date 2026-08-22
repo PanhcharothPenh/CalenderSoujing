@@ -11,6 +11,17 @@ import config
 SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 logger = logging.getLogger(__name__)
 
+def find_json_credentials() -> str:
+    """Scan all environment variables for Service Account JSON data."""
+    for key, val in os.environ.items():
+        if not val:
+            continue
+        v_strip = val.strip()
+        if ("service_account" in v_strip or "private_key" in v_strip) and "{" in v_strip:
+            logger.info(f"Found Google Service Account JSON in environment variable: {key}")
+            return v_strip
+    return ""
+
 def get_khmer_period(dt: datetime.datetime) -> str:
     """Return Khmer period of day name (ព្រឹក, រសៀល, ល្ងាច, យប់) based on hour."""
     hour = dt.hour
@@ -30,15 +41,7 @@ class GoogleCalendarManager:
 
     def authenticate(self):
         """Authenticate using Service Account credentials file or raw JSON env var."""
-        json_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
-        file_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "").strip()
-
-        # Check if either env var contains raw JSON string
-        raw_str = ""
-        if json_env and ("{" in json_env or json_env.startswith("'") or json_env.startswith('"')):
-            raw_str = json_env
-        elif file_env and ("{" in file_env or file_env.startswith("'") or file_env.startswith('"')):
-            raw_str = file_env
+        raw_str = find_json_credentials()
 
         if raw_str:
             # Strip surrounding single/double quotes if present from copy-paste
@@ -53,16 +56,20 @@ class GoogleCalendarManager:
                 credentials = service_account.Credentials.from_service_account_info(
                     info, scopes=SCOPES
                 )
-                logger.info("Authenticated with Google Calendar API using raw JSON environment variable.")
+                logger.info("Authenticated with Google Calendar API using inline JSON environment variable.")
                 self.service = build('calendar', 'v3', credentials=credentials)
                 return
             except Exception as parse_err:
                 logger.error(f"Error parsing inline JSON string: {parse_err}")
 
-        # Fallback to file path
+        # Fallback to credentials.json file
         cred_path = config.get_credentials_path()
         if not cred_path.exists():
-            raise FileNotFoundError(f"Service Account key file not found at {cred_path}")
+            raise FileNotFoundError(
+                "Google Service Account Credentials Not Found!\n"
+                "សូមបញ្ចូល Variable ឈ្មោះ GOOGLE_SERVICE_ACCOUNT_JSON ក្នុង Railway (Variables) "
+                "ឬដាក់ file credentials.json ក្នុង project folder"
+            )
 
         credentials = service_account.Credentials.from_service_account_file(
             str(cred_path), scopes=SCOPES
