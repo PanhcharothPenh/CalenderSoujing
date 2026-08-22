@@ -29,7 +29,11 @@ DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "07:00")
 SUBSCRIBERS_FILE = BASE_DIR / "subscribers.json"
 
 def get_credentials_path() -> Path:
-    path = Path(GOOGLE_SERVICE_ACCOUNT_FILE)
+    val = GOOGLE_SERVICE_ACCOUNT_FILE.strip()
+    if val.startswith("{") or "service_account" in val:
+        # If user pasted raw JSON into GOOGLE_SERVICE_ACCOUNT_FILE instead of GOOGLE_SERVICE_ACCOUNT_JSON
+        return BASE_DIR / "credentials.json"
+    path = Path(val)
     if not path.is_absolute():
         path = BASE_DIR / path
     return path
@@ -89,7 +93,14 @@ def validate_config() -> list:
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "your_telegram_bot_token_here":
         missing.append("TELEGRAM_BOT_TOKEN")
     
-    has_json_env = bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON"))
+    json_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+    file_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "").strip()
+    
+    has_json_env = (
+        (json_env and (json_env.startswith("{") or json_env.startswith("'") or json_env.startswith('"'))) or 
+        (file_env and (file_env.startswith("{") or file_env.startswith("'") or file_env.startswith('"')))
+    )
+    
     cred_path = get_credentials_path()
     if not has_json_env and not cred_path.exists():
         missing.append("Google Service Account Credentials (credentials.json or GOOGLE_SERVICE_ACCOUNT_JSON env var)")

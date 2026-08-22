@@ -30,47 +30,44 @@ class GoogleCalendarManager:
 
     def authenticate(self):
         """Authenticate using Service Account credentials file or raw JSON env var."""
-        service_account_json_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-        if service_account_json_env:
-            raw_str = service_account_json_env.strip()
-            
-            # Remove surrounding single or double quotes if present from Railway copy-paste
+        json_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+        file_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "").strip()
+
+        # Check if either env var contains raw JSON string
+        raw_str = ""
+        if json_env and ("{" in json_env or json_env.startswith("'") or json_env.startswith('"')):
+            raw_str = json_env
+        elif file_env and ("{" in file_env or file_env.startswith("'") or file_env.startswith('"')):
+            raw_str = file_env
+
+        if raw_str:
+            # Strip surrounding single/double quotes if present from copy-paste
             if (raw_str.startswith("'") and raw_str.endswith("'")) or (raw_str.startswith('"') and raw_str.endswith('"')):
                 raw_str = raw_str[1:-1].strip()
             
-            # Handle double-escaped or single-escaped newlines
+            # Unescape newlines if needed
             raw_str = raw_str.replace('\\\\n', '\n').replace('\\n', '\n')
 
             try:
                 info = json.loads(raw_str)
+                credentials = service_account.Credentials.from_service_account_info(
+                    info, scopes=SCOPES
+                )
+                logger.info("Authenticated with Google Calendar API using raw JSON environment variable.")
+                self.service = build('calendar', 'v3', credentials=credentials)
+                return
             except Exception as parse_err:
-                logger.error(f"Error parsing GOOGLE_SERVICE_ACCOUNT_JSON: {parse_err}")
-                # Fallback to credentials.json if available
-                cred_path = config.get_credentials_path()
-                if cred_path.exists():
-                    logger.info("Falling back to credentials.json file.")
-                    credentials = service_account.Credentials.from_service_account_file(
-                        str(cred_path), scopes=SCOPES
-                    )
-                    self.service = build('calendar', 'v3', credentials=credentials)
-                    return
-                else:
-                    raise parse_err
+                logger.error(f"Error parsing inline JSON string: {parse_err}")
 
-            credentials = service_account.Credentials.from_service_account_info(
-                info, scopes=SCOPES
-            )
-            logger.info("Authenticated with Google Calendar API using GOOGLE_SERVICE_ACCOUNT_JSON environment variable.")
-        else:
-            cred_path = config.get_credentials_path()
-            if not cred_path.exists():
-                raise FileNotFoundError(f"Service Account key file not found at {cred_path}")
+        # Fallback to file path
+        cred_path = config.get_credentials_path()
+        if not cred_path.exists():
+            raise FileNotFoundError(f"Service Account key file not found at {cred_path}")
 
-            credentials = service_account.Credentials.from_service_account_file(
-                str(cred_path), scopes=SCOPES
-            )
-            logger.info("Authenticated with Google Calendar API using credentials.json file.")
-
+        credentials = service_account.Credentials.from_service_account_file(
+            str(cred_path), scopes=SCOPES
+        )
+        logger.info("Authenticated with Google Calendar API using credentials.json file.")
         self.service = build('calendar', 'v3', credentials=credentials)
 
     def _ensure_authenticated(self):
