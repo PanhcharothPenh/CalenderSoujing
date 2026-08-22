@@ -1,3 +1,5 @@
+import os
+import json
 import datetime
 import logging
 import pytz
@@ -15,16 +17,25 @@ class GoogleCalendarManager:
         self.tz = pytz.timezone(config.TIMEZONE)
 
     def authenticate(self):
-        """Authenticate using Service Account credentials."""
-        cred_path = config.get_credentials_path()
-        if not cred_path.exists():
-            raise FileNotFoundError(f"Service Account key file not found at {cred_path}")
+        """Authenticate using Service Account credentials file or raw JSON env var."""
+        service_account_json_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+        if service_account_json_env:
+            info = json.loads(service_account_json_env)
+            credentials = service_account.Credentials.from_service_account_info(
+                info, scopes=SCOPES
+            )
+            logger.info("Authenticated with Google Calendar API using GOOGLE_SERVICE_ACCOUNT_JSON environment variable.")
+        else:
+            cred_path = config.get_credentials_path()
+            if not cred_path.exists():
+                raise FileNotFoundError(f"Service Account key file not found at {cred_path}")
 
-        credentials = service_account.Credentials.from_service_account_file(
-            str(cred_path), scopes=SCOPES
-        )
+            credentials = service_account.Credentials.from_service_account_file(
+                str(cred_path), scopes=SCOPES
+            )
+            logger.info("Authenticated with Google Calendar API using credentials.json file.")
+
         self.service = build('calendar', 'v3', credentials=credentials)
-        logger.info("Successfully authenticated with Google Calendar API.")
 
     def _ensure_authenticated(self):
         if not self.service:

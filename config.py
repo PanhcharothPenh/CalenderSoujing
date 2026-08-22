@@ -36,8 +36,9 @@ def validate_config() -> list:
     if not TELEGRAM_CHAT_ID or TELEGRAM_CHAT_ID == "your_telegram_chat_id_here":
         missing.append("TELEGRAM_CHAT_ID")
     
+    has_json_env = bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON"))
     cred_path = get_credentials_path()
-    if not cred_path.exists():
-        missing.append(f"Google Service Account File ({GOOGLE_SERVICE_ACCOUNT_FILE})")
+    if not has_json_env and not cred_path.exists():
+        missing.append(f"Google Service Account Credentials (credentials.json or GOOGLE_SERVICE_ACCOUNT_JSON env var)")
     
     return missing
