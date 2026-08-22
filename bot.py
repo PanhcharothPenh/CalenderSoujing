@@ -3,6 +3,8 @@ import datetime
 import logging
 import asyncio
 import threading
+import urllib.request
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Set
 import pytz
@@ -62,6 +64,21 @@ def start_health_server():
         server.serve_forever()
     except Exception as e:
         logger.error(f"Error starting health check HTTP server: {e}")
+
+def start_keep_alive():
+    """Background thread to self-ping HTTP server every 5 minutes to keep Render Free Web Service active 24/7."""
+    port = int(os.getenv("PORT", 8080))
+    url = f"http://127.0.0.1:{port}/"
+    time.sleep(10)  # Wait for initial HTTP server startup
+    while True:
+        try:
+            time.sleep(300)  # Ping every 5 minutes
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                pass
+            logger.info("Self-ping keep-alive successful.")
+        except Exception as e:
+            logger.debug(f"Keep-alive ping exception: {e}")
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command with auto-subscription."""
@@ -375,6 +392,9 @@ def main():
 
     # Start HTTP Health Check Server in a background thread for Render Free Web Service
     threading.Thread(target=start_health_server, daemon=True).start()
+
+    # Start self-ping keep-alive loop to prevent Render Free Web Service from going to sleep
+    threading.Thread(target=start_keep_alive, daemon=True).start()
 
     missing = config.validate_config()
     if missing:

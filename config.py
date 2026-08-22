@@ -20,9 +20,9 @@ BASE_DIR = Path(__file__).resolve().parent
 # Load environment variables from .env file
 load_dotenv(BASE_DIR / ".env")
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "primary")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8624526881:AAH7RFxUm0ByjiINRhGXRNnx7CDlrjbmsDs")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "7818150707")
+GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "67d11dbc36e8dbf76f3f3332aa3d0d798a6bfc8f632088201e3e418bee1ba55d@group.calendar.google.com")
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "credentials.json")
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Phnom_Penh")
 REMINDER_MINUTES = int(os.getenv("REMINDER_MINUTES", "15"))
@@ -55,7 +55,6 @@ def has_inline_json_credentials() -> bool:
 def get_credentials_path() -> Path:
     val = GOOGLE_SERVICE_ACCOUNT_FILE.strip()
     if val.startswith("{") or "service_account" in val or "private_key" in val:
-        # If user pasted raw JSON into GOOGLE_SERVICE_ACCOUNT_FILE instead of GOOGLE_SERVICE_ACCOUNT_JSON
         return BASE_DIR / "credentials.json"
     path = Path(val)
     if not path.is_absolute():
@@ -63,10 +62,10 @@ def get_credentials_path() -> Path:
     return path
 
 def get_env_chat_ids() -> List[str]:
-    """Parse TELEGRAM_CHAT_ID from .env if specified."""
-    raw = os.getenv("TELEGRAM_CHAT_ID", "")
+    """Parse TELEGRAM_CHAT_ID from env with fallback to 7818150707."""
+    raw = os.getenv("TELEGRAM_CHAT_ID", "7818150707")
     if not raw or raw == "your_telegram_chat_id_here":
-        return []
+        return ["7818150707"]
     return [cid.strip() for cid in raw.split(",") if cid.strip()]
 
 def load_subscribers() -> Set[str]:
