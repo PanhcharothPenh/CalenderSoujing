@@ -1,0 +1,243 @@
+import datetime
+import logging
+import asyncio
+from typing import Set
+import pytz
+
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+)
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+import config
+from google_calendar import GoogleCalendarManager
+
+# Configure logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Global instances
+calendar_mgr = GoogleCalendarManager()
+sent_reminders: Set[str] = set()
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /start command."""
+    chat_id = update.effective_chat.id
+    welcome_text = (
+        f"👋 <b>ជម្រាបសួរ! ខ្ញុំជា Telegram Bot ជូនដំណឹងពី Google Calendar</b>\n\n"
+        f"🆔 <b>Chat ID របស់អ្នកគឺ:</b> <code>{chat_id}</code>\n"
+        f"<i>(សូមយក Chat ID នេះទៅដាក់ក្នុង file .env ត្រង់ TELEGRAM_CHAT_ID)</i>\n\n"
+        f"<b>📋 ពាក្យបញ្ជាដែលមាន (Commands):</b>\n"
+        f"• /today - មើល Event ទាំងអស់សម្រាប់ថ្ងៃនេះ\n"
+        f"• /upcoming - មើល Event ជិតមកដល់ក្នុងរយៈពេល ៧ ថ្ងៃ\n"
+        f"• /status - ពិនិត្យស្ថានភាព Connection ទៅកាន់ Google Calendar\n"
+        f"• /help - ការណែនាំបន្ថែម\n"
+    )
+    await update.message.reply_text(welcome_text, parse_mode="HTML")
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /help command."""
+    help_text = (
+        "ℹ️ <b>ការណែនាំប្រើប្រាស់ Bot:</b>\n\n"
+        "• Bot នេះនឹងផ្ញើសារជូនដំណឹងដោយស្វ័យប្រវត្តិ នៅពេលមាន Event ជិតដល់ម៉ោង (ឧ. ១៥នាទីមុន)។\n"
+        "• Bot នឹងផ្ញើសារសង្ខេប Event សម្រាប់ថ្ងៃថ្មីរៀងរាល់ព្រឹក ម៉ោង ៧:០០ ព្រឹក។\n\n"
+        "<b>ពាក្យបញ្ជាផ្សេងៗ:</b>\n"
+        "/today - បង្ហាញ Event ថ្ងៃនេះ\n"
+        "/upcoming - បង្ហាញ Event ៧ថ្ងៃខាងមុខ\n"
+        "/status - ពិនិត្យស្ថានភាពប្រព័ន្ធ\n"
+    )
+    await update.message.reply_text(help_text, parse_mode="HTML")
+
+async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /today command."""
+    try:
+        events = calendar_mgr.get_today_events()
+        if not events:
+            await update.message.reply_text("📅 <b>គ្មាន Event សម្រាប់ថ្ងៃនេះទេ!</b>", parse_mode="HTML")
+            return
+
+        msg = f"☀️ <b>Event ទាំងអស់សម្រាប់ថ្ងៃនេះ ({len(events)} Event):</b>\n\n"
+        for idx, event in enumerate(events, 1):
+            msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
+
+        await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception as e:
+        logger.error(f"Error fetching today events: {e}")
+        await update.message.reply_text(f"❌ <b>មានបញ្ហាក្នុងការទាញយក Event:</b>\n<code>{e}</code>", parse_mode="HTML")
+
+async def upcoming_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /upcoming command."""
+    try:
+        events = calendar_mgr.get_upcoming_events(days=7)
+        if not events:
+            await update.message.reply_text("📅 <b>គ្មាន Event ក្នុងរយៈពេល ៧ ថ្ងៃខាងមុខទេ!</b>", parse_mode="HTML")
+            return
+
+        msg = f"📆 <b>Event ក្នុងរយៈពេល ៧ ថ្ងៃខាងមុខ ({len(events)} Event):</b>\n\n"
+        for idx, event in enumerate(events, 1):
+            msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
+
+        await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception as e:
+        logger.error(f"Error fetching upcoming events: {e}")
+        await update.message.reply_text(f"❌ <b>មានបញ្ហាក្នុងការទាញយក Event:</b>\n<code>{e}</code>", parse_mode="HTML")
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /status command."""
+    missing = config.validate_config()
+    if missing:
+        status_msg = f"⚠️ <b>ប្រព័ន្ធមិនទាន់រៀបចំរួចរាល់ទេ!</b>\n\nខ្វះខាត Configuration:\n- " + "\n- ".join(missing)
+        await update.message.reply_text(status_msg, parse_mode="HTML")
+        return
+
+    try:
+        events = calendar_mgr.get_today_events()
+        status_msg = (
+            "✅ <b>ប្រព័ន្ធដំណើរការជាប្រក្រតី!</b>\n\n"
+            "• Google Calendar API: Connected\n"
+            f"• Calendar ID: <code>{config.GOOGLE_CALENDAR_ID}</code>\n"
+            f"• Timezone: {config.TIMEZONE}\n"
+            f"• Reminder: {config.REMINDER_MINUTES} នាទីមុន Event\n"
+            f"• Daily Summary: ម៉ោង {config.DAILY_SUMMARY_TIME}\n"
+            f"• Events ថ្ងៃនេះ: {len(events)} Event\n"
+        )
+        await update.message.reply_text(status_msg, parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text(f"❌ <b>Google Calendar Connection Error:</b>\n<code>{e}</code>", parse_mode="HTML")
+
+async def check_upcoming_reminders(bot):
+    """Background task to check and send reminders for events starting soon."""
+    if not config.TELEGRAM_CHAT_ID or config.TELEGRAM_CHAT_ID == "your_telegram_chat_id_here":
+        return
+
+    try:
+        tz = pytz.timezone(config.TIMEZONE)
+        now = datetime.datetime.now(tz)
+        reminder_window_start = now
+        reminder_window_end = now + datetime.timedelta(minutes=config.REMINDER_MINUTES + 2)
+
+        events = calendar_mgr.get_events_starting_between(reminder_window_start, reminder_window_end)
+        
+        for event in events:
+            event_id = event.get('id')
+            start = event.get('start', {})
+            
+            # Skip all-day events for exact minute reminders
+            if 'dateTime' not in start:
+                continue
+
+            start_dt = datetime.datetime.fromisoformat(start['dateTime']).astimezone(tz)
+            time_diff = (start_dt - now).total_seconds() / 60.0
+
+            # Send reminder if start time is within [0, REMINDER_MINUTES]
+            reminder_key = f"{event_id}_{start_dt.isoformat()}"
+            if 0 <= time_diff <= config.REMINDER_MINUTES and reminder_key not in sent_reminders:
+                event_details = calendar_mgr.format_event_message(event)
+                msg = (
+                    f"🔔 <b>[ការជូនដំណឹង] Event ជិតដល់ម៉ោងក្នុងពេល {int(time_diff)} នាទីទៀត!</b>\n\n"
+                    f"{event_details}"
+                )
+                await bot.send_message(
+                    chat_id=config.TELEGRAM_CHAT_ID,
+                    text=msg,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True
+                )
+                sent_reminders.add(reminder_key)
+                logger.info(f"Sent reminder for event: {event.get('summary')}")
+
+    except Exception as e:
+        logger.error(f"Error in check_upcoming_reminders scheduler: {e}")
+
+async def send_daily_summary(bot):
+    """Background task to send daily summary of events."""
+    if not config.TELEGRAM_CHAT_ID or config.TELEGRAM_CHAT_ID == "your_telegram_chat_id_here":
+        return
+
+    try:
+        events = calendar_mgr.get_today_events()
+        tz = pytz.timezone(config.TIMEZONE)
+        today_str = datetime.datetime.now(tz).strftime('%d/%m/%Y')
+
+        if not events:
+            msg = f"☀️ <b>អរុណសួស្តី! ({today_str})</b>\n\n📅 ថ្ងៃនេះគ្មាន Event រៀបចំទុកទេ! រីករាយថ្ងៃថ្មី!"
+        else:
+            msg = f"☀️ <b>អរុណសួស្តី! នេះជា Event ទាំងអស់សម្រាប់ថ្ងៃនេះ ({today_str}):</b>\n\n"
+            for idx, event in enumerate(events, 1):
+                msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
+
+        await bot.send_message(
+            chat_id=config.TELEGRAM_CHAT_ID,
+            text=msg,
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
+        logger.info("Sent daily summary notification.")
+    except Exception as e:
+        logger.error(f"Error sending daily summary: {e}")
+
+async def post_init(application: Application):
+    """Setup background tasks scheduler after bot initialization."""
+    bot = application.bot
+    tz = pytz.timezone(config.TIMEZONE)
+    scheduler = AsyncIOScheduler(timezone=tz)
+
+    # Schedule reminder check every 1 minute
+    scheduler.add_job(
+        check_upcoming_reminders,
+        'interval',
+        minutes=1,
+        args=[bot]
+    )
+
+    # Schedule daily summary
+    summary_hour, summary_minute = map(int, config.DAILY_SUMMARY_TIME.split(':'))
+    scheduler.add_job(
+        send_daily_summary,
+        CronTrigger(hour=summary_hour, minute=summary_minute, timezone=tz),
+        args=[bot]
+    )
+
+    scheduler.start()
+    logger.info("Scheduler started successfully for reminders and daily summary.")
+
+def main():
+    missing = config.validate_config()
+    if missing:
+        logger.warning(
+            "⚠️ Config validation warning:\nMissing parameters:\n - " + "\n - ".join(missing) +
+            "\nBot will start, but Google Calendar features require valid configuration in .env and credentials.json!"
+        )
+
+    if not config.TELEGRAM_BOT_TOKEN or config.TELEGRAM_BOT_TOKEN == "your_telegram_bot_token_here":
+        print("❌ Error: TELEGRAM_BOT_TOKEN is not set in .env file.")
+        print("Please configure .env before starting the bot.")
+        return
+
+    # Build Application
+    application = (
+        Application.builder()
+        .token(config.TELEGRAM_BOT_TOKEN)
+        .post_init(post_init)
+        .build()
+    )
+
+    # Register Handlers
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("today", today_command))
+    application.add_handler(CommandHandler("upcoming", upcoming_command))
+    application.add_handler(CommandHandler("status", status_command))
+
+    logger.info("Starting Telegram Bot polling...")
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
