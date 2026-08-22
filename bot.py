@@ -206,19 +206,16 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     missing = config.validate_config()
     has_json = bool(find_json_credentials())
     subscribers = config.load_subscribers()
-    
-    user_envs = [k for k in os.environ.keys() if not k.startswith("PATH") and not k.startswith("HOME") and not k.startswith("NIX") and not k.startswith("LC_")]
 
     try:
         events = calendar_mgr.get_today_events()
         status_msg = (
-            "✅ <b>ប្រព័ន្ធដំណើរការជាប្រក្រតី!</b>\n\n"
-            "• Google Credentials Detected: " + ("Yes ✅" if has_json else "No ❌") + "\n"
-            f"• Calendar ID: <code>{config.GOOGLE_CALENDAR_ID}</code>\n"
-            f"• Timezone: {config.TIMEZONE}\n"
-            f"• Auto Subscribers ({len(subscribers)}): <code>{', '.join(subscribers) if subscribers else 'គ្មាន'}</code>\n"
-            f"• Env Variables ({len(user_envs)}): <code>{', '.join(user_envs)}</code>\n"
-            f"• Events ថ្ងៃនេះ: {len(events)} Event\n"
+            "✅ <b>ប្រព័ន្ធដំណើរការជាប្រក្រតី! (System Status OK)</b>\n\n"
+            "• 🔑 <b>Google Credentials:</b> " + ("ភ្ជាប់រួចរាល់ (Connected ✅)" if has_json else "មិនទាន់បានភ្ជាប់ ❌") + "\n"
+            f"• 📅 <b>Calendar ID:</b> <code>{config.GOOGLE_CALENDAR_ID}</code>\n"
+            f"• ⏰ <b>Timezone:</b> {config.TIMEZONE}\n"
+            f"• 👥 <b>អ្នកចុះឈ្មោះទទួលសារ ({len(subscribers)}):</b> <code>{', '.join(subscribers) if subscribers else 'គ្មាន'}</code>\n"
+            f"• ☀️ <b>Events ថ្ងៃនេះ:</b> {len(events)} Event\n"
         )
         await update.message.reply_text(
             status_msg,
@@ -228,9 +225,8 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         status_msg = (
             "⚠️ <b>ស្ថានភាពប្រព័ន្ធ (System Status):</b>\n\n"
-            "• Google Credentials Detected: " + ("Yes ✅" if has_json else "No ❌") + "\n"
-            f"• Environment Variables Found ({len(user_envs)}): <code>{', '.join(user_envs)}</code>\n"
-            f"• Error: <code>{e}</code>\n"
+            "• 🔑 <b>Google Credentials:</b> " + ("ភ្ជាប់រួចរាល់ (Connected ✅)" if has_json else "មិនទាន់បានភ្ជាប់ ❌") + "\n"
+            f"• ❌ <b>Error:</b> <code>{e}</code>\n"
         )
         await update.message.reply_text(
             status_msg,
