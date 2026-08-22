@@ -116,7 +116,5 @@ class GoogleCalendarManager:
             # Shorten description if too long
             desc_text = description[:200] + ('...' if len(description) > 200 else '')
             msg += f"📝 <b>ពិពណ៌នា:</b> {desc_text}\n"
-        if html_link:
-            msg += f"🔗 <a href='{html_link}'>មើលក្នុង Google Calendar</a>\n"
 
         return msg
