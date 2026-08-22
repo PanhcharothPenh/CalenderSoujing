@@ -33,12 +33,29 @@ class GoogleCalendarManager:
         service_account_json_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
         if service_account_json_env:
             raw_str = service_account_json_env.strip()
+            
+            # Remove surrounding single or double quotes if present from Railway copy-paste
+            if (raw_str.startswith("'") and raw_str.endswith("'")) or (raw_str.startswith('"') and raw_str.endswith('"')):
+                raw_str = raw_str[1:-1].strip()
+            
+            # Handle double-escaped or single-escaped newlines
+            raw_str = raw_str.replace('\\\\n', '\n').replace('\\n', '\n')
+
             try:
                 info = json.loads(raw_str)
-            except Exception:
-                # Handle double escaped newlines
-                cleaned_str = raw_str.replace('\\n', '\n')
-                info = json.loads(cleaned_str)
+            except Exception as parse_err:
+                logger.error(f"Error parsing GOOGLE_SERVICE_ACCOUNT_JSON: {parse_err}")
+                # Fallback to credentials.json if available
+                cred_path = config.get_credentials_path()
+                if cred_path.exists():
+                    logger.info("Falling back to credentials.json file.")
+                    credentials = service_account.Credentials.from_service_account_file(
+                        str(cred_path), scopes=SCOPES
+                    )
+                    self.service = build('calendar', 'v3', credentials=credentials)
+                    return
+                else:
+                    raise parse_err
 
             credentials = service_account.Credentials.from_service_account_info(
                 info, scopes=SCOPES
