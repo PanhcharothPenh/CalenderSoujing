@@ -7,11 +7,13 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Set
 import pytz
 
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
+    MessageHandler,
     ContextTypes,
+    filters,
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -29,6 +31,15 @@ logger = logging.getLogger(__name__)
 # Global instances
 calendar_mgr = GoogleCalendarManager()
 sent_reminders: Set[str] = set()
+
+def get_main_keyboard() -> ReplyKeyboardMarkup:
+    """Generate permanent Khmer Telegram keyboard buttons."""
+    keyboard = [
+        [KeyboardButton("📅 Event ថ្ងៃនេះ"), KeyboardButton("📆 Event ៧ថ្ងៃខាងមុខ")],
+        [KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ"), KeyboardButton("🔕 លុបការចុះឈ្មោះ")],
+        [KeyboardButton("📊 ស្ថានភាពប្រព័ន្ធ"), KeyboardButton("ℹ️ ការណែនាំ")]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
     """Lightweight HTTP handler for Render/Cloud free Web Service health checks."""
@@ -67,14 +78,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👋 <b>ជម្រាបសួរ! ខ្ញុំជា Telegram Bot ជូនដំណឹងពី Google Calendar</b>\n\n"
         f"{status_text}\n"
         f"🆔 <b>Chat ID របស់អ្នក:</b> <code>{chat_id}</code>\n\n"
-        f"<b>📋 ពាក្យបញ្ជាដែលមាន (Commands):</b>\n"
-        f"• /today - មើល Event ទាំងអស់សម្រាប់ថ្ងៃនេះ\n"
-        f"• /upcoming - មើល Event ជិតមកដល់ក្នុងរយៈពេល ៧ ថ្ងៃ\n"
-        f"• /status - ពិនិត្យស្ថានភាព Connection និងសារដើម\n"
-        f"• /stop - លុបការចុះឈ្មោះទទួលសារជូនដំណឹង\n"
-        f"• /help - ការណែនាំបន្ថែម\n"
+        f"<b>👇 សូមចុចប៊ូតុងខាងក្រោមដើម្បីប្រើប្រាស់៖</b>"
     )
-    await update.message.reply_text(welcome_text, parse_mode="HTML")
+    await update.message.reply_text(
+        welcome_text,
+        parse_mode="HTML",
+        reply_markup=get_main_keyboard()
+    )
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /stop or /unsubscribe command."""
@@ -83,63 +93,96 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if removed:
         await update.message.reply_text(
             "🔕 <b>អ្នកបានលុបការចុះឈ្មោះទទួលសារជូនដំណឹងរួចរាល់ហើយ!</b>\n"
-            "ប្រសិនបើចង់ចុះឈ្មោះសារជាថ្មី សូមផ្ញើសារ /start",
-            parse_mode="HTML"
+            "ប្រសិនបើចង់ចុះឈ្មោះសារជាថ្មី សូមចុចប៊ូតុង 🔔 ចុះឈ្មោះទទួលសារ",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard()
         )
     else:
         await update.message.reply_text(
-            "ℹ️ អ្នកមិនទាន់បានចុះឈ្មោះទទួលសារនៅឡើយទេ។ ផ្ញើសារ /start ដើម្បីចុះឈ្មោះ។",
-            parse_mode="HTML"
+            "ℹ️ អ្នកមិនទាន់បានចុះឈ្មោះទទួលសារនៅឡើយទេ។ ចុចប៊ូតុង 🔔 ចុះឈ្មោះទទួលសារ ដើម្បីចុះឈ្មោះ។",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard()
         )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command."""
     help_text = (
         "ℹ️ <b>ការណែនាំប្រើប្រាស់ Bot:</b>\n\n"
-        "• គ្រាន់តែចុច /start អ្នកនឹងត្រូវបានចុះឈ្មោះទទួលសារជូនដំណឹងដោយស្វ័យប្រវត្តិ ⚡\n"
+        "• គ្រាន់តែចុច 🔔 ចុះឈ្មោះទទួលសារ អ្នកនឹងត្រូវបានចុះឈ្មោះដោយស្វ័យប្រវត្តិ ⚡\n"
         "• ជូនដំណឹងនៅពេលមាន Event ជិតដល់ម៉ោង (ឧ. ១៥នាទីមុន)។\n"
         "• ផ្ញើសារសង្ខេប Event សម្រាប់ថ្ងៃថ្មីរៀងរាល់ព្រឹក ម៉ោង ៧:០០ ព្រឹក។\n\n"
-        "<b>ពាក្យបញ្ជាផ្សេងៗ:</b>\n"
-        "/today - បង្ហាញ Event ថ្ងៃនេះ\n"
-        "/upcoming - បង្ហាញ Event ៧ថ្ងៃខាងមុខ\n"
-        "/stop - លុបការចុះឈ្មោះ\n"
-        "/status - ពិនិត្យស្ថានភាពប្រព័ន្ធ\n"
+        "<b>ប៊ូតុងបញ្ជា៖</b>\n"
+        "📅 Event ថ្ងៃនេះ - បង្ហាញ Event ថ្ងៃនេះ\n"
+        "📆 Event ៧ថ្ងៃខាងមុខ - បង្ហាញ Event ៧ថ្ងៃខាងមុខ\n"
+        "🔔 ចុះឈ្មោះទទួលសារ - ចុះឈ្មោះទទួលសាររំលឹក\n"
+        "🔕 លុបការចុះឈ្មោះ - ឈប់ទទួលសារ\n"
+        "📊 ស្ថានភាពប្រព័ន្ធ - ពិនិត្យស្ថានភាពប្រព័ន្ធ\n"
     )
-    await update.message.reply_text(help_text, parse_mode="HTML")
+    await update.message.reply_text(
+        help_text,
+        parse_mode="HTML",
+        reply_markup=get_main_keyboard()
+    )
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /today command."""
     try:
         events = calendar_mgr.get_today_events()
         if not events:
-            await update.message.reply_text("📅 <b>គ្មាន Event សម្រាប់ថ្ងៃនេះទេ!</b>", parse_mode="HTML")
+            await update.message.reply_text(
+                "📅 <b>គ្មាន Event សម្រាប់ថ្ងៃនេះទេ!</b>",
+                parse_mode="HTML",
+                reply_markup=get_main_keyboard()
+            )
             return
 
         msg = f"☀️ <b>Event ទាំងអស់សម្រាប់ថ្ងៃនេះ ({len(events)} Event):</b>\n\n"
         for idx, event in enumerate(events, 1):
             msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
 
-        await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=True)
+        await update.message.reply_text(
+            msg,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=get_main_keyboard()
+        )
     except Exception as e:
         logger.error(f"Error fetching today events: {e}")
-        await update.message.reply_text(f"❌ <b>មានបញ្ហាក្នុងការទាញយក Event:</b>\n<code>{e}</code>", parse_mode="HTML")
+        await update.message.reply_text(
+            f"❌ <b>មានបញ្ហាក្នុងការទាញយក Event:</b>\n<code>{e}</code>",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard()
+        )
 
 async def upcoming_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /upcoming command."""
     try:
         events = calendar_mgr.get_upcoming_events(days=7)
         if not events:
-            await update.message.reply_text("📅 <b>គ្មាន Event ក្នុងរយៈពេល ៧ ថ្ងៃខាងមុខទេ!</b>", parse_mode="HTML")
+            await update.message.reply_text(
+                "📅 <b>គ្មាន Event ក្នុងរយៈពេល ៧ ថ្ងៃខាងមុខទេ!</b>",
+                parse_mode="HTML",
+                reply_markup=get_main_keyboard()
+            )
             return
 
         msg = f"📆 <b>Event ក្នុងរយៈពេល ៧ ថ្ងៃខាងមុខ ({len(events)} Event):</b>\n\n"
         for idx, event in enumerate(events, 1):
             msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
 
-        await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=True)
+        await update.message.reply_text(
+            msg,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=get_main_keyboard()
+        )
     except Exception as e:
         logger.error(f"Error fetching upcoming events: {e}")
-        await update.message.reply_text(f"❌ <b>មានបញ្ហាក្នុងការទាញយក Event:</b>\n<code>{e}</code>", parse_mode="HTML")
+        await update.message.reply_text(
+            f"❌ <b>មានបញ្ហាក្នុងការទាញយក Event:</b>\n<code>{e}</code>",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard()
+        )
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status command."""
@@ -160,7 +203,11 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• Env Variables ({len(user_envs)}): <code>{', '.join(user_envs)}</code>\n"
             f"• Events ថ្ងៃនេះ: {len(events)} Event\n"
         )
-        await update.message.reply_text(status_msg, parse_mode="HTML")
+        await update.message.reply_text(
+            status_msg,
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard()
+        )
     except Exception as e:
         status_msg = (
             "⚠️ <b>ស្ថានភាពប្រព័ន្ធ (System Status):</b>\n\n"
@@ -168,7 +215,31 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• Environment Variables Found ({len(user_envs)}): <code>{', '.join(user_envs)}</code>\n"
             f"• Error: <code>{e}</code>\n"
         )
-        await update.message.reply_text(status_msg, parse_mode="HTML")
+        await update.message.reply_text(
+            status_msg,
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard()
+        )
+
+async def handle_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Route Telegram Keyboard Button clicks to corresponding command handlers."""
+    if not update.message or not update.message.text:
+        return
+
+    text = update.message.text.strip()
+    
+    if text == "📅 Event ថ្ងៃនេះ":
+        await today_command(update, context)
+    elif text == "📆 Event ៧ថ្ងៃខាងមុខ":
+        await upcoming_command(update, context)
+    elif text == "🔔 ចុះឈ្មោះទទួលសារ":
+        await start_command(update, context)
+    elif text == "🔕 លុបការចុះឈ្មោះ":
+        await stop_command(update, context)
+    elif text == "📊 ស្ថានភាពប្រព័ន្ធ":
+        await status_command(update, context)
+    elif text == "ℹ️ ការណែនាំ":
+        await help_command(update, context)
 
 async def check_upcoming_reminders(bot):
     """Background task to check and send reminders for events starting soon to all subscribers."""
@@ -256,10 +327,25 @@ async def send_daily_summary(bot):
         logger.error(f"Error sending daily summary: {e}")
 
 async def post_init(application: Application):
-    """Setup background tasks scheduler after bot initialization."""
+    """Setup background tasks scheduler and bot commands menu after initialization."""
     bot = application.bot
     tz = pytz.timezone(config.TIMEZONE)
     scheduler = AsyncIOScheduler(timezone=tz)
+
+    # Set Telegram Bot Commands menu
+    commands = [
+        BotCommand("start", "ចាប់ផ្តើម និងចុះឈ្មោះទទួលសារ (Start & Subscribe)"),
+        BotCommand("today", "មើល Event ទាំងអស់សម្រាប់ថ្ងៃនេះ (Today's Events)"),
+        BotCommand("upcoming", "មើល Event ៧ថ្ងៃខាងមុខ (Upcoming Events)"),
+        BotCommand("status", "ពិនិត្យស្ថានភាពប្រព័ន្ធ (Check Status)"),
+        BotCommand("stop", "លុបការចុះឈ្មោះទទួលសារ (Unsubscribe)"),
+        BotCommand("help", "ការណែនាំបន្ថែម (Help)"),
+    ]
+    try:
+        await bot.set_my_commands(commands)
+        logger.info("Bot command menu set successfully.")
+    except Exception as e:
+        logger.error(f"Error setting bot commands: {e}")
 
     # Schedule reminder check every 1 minute
     scheduler.add_job(
@@ -311,7 +397,7 @@ def main():
         .build()
     )
 
-    # Register Handlers
+    # Register Command Handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("stop", stop_command))
     application.add_handler(CommandHandler("unsubscribe", stop_command))
@@ -319,6 +405,9 @@ def main():
     application.add_handler(CommandHandler("today", today_command))
     application.add_handler(CommandHandler("upcoming", upcoming_command))
     application.add_handler(CommandHandler("status", status_command))
+
+    # Register Keyboard Button Message Handler
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_button_click))
 
     logger.info("Starting Telegram Bot polling...")
     application.run_polling()
