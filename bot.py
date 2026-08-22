@@ -2,6 +2,8 @@ import os
 import datetime
 import logging
 import asyncio
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Set
 import pytz
 
@@ -27,6 +29,28 @@ logger = logging.getLogger(__name__)
 # Global instances
 calendar_mgr = GoogleCalendarManager()
 sent_reminders: Set[str] = set()
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    """Lightweight HTTP handler for Render/Cloud free Web Service health checks."""
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(b"OK - Google Calendar Telegram Bot is running 24/7!")
+
+    def log_message(self, format, *args):
+        # Suppress noisy HTTP GET access logs
+        pass
+
+def start_health_server():
+    """Start background HTTP server for Render/Cloud web service health check."""
+    port = int(os.getenv("PORT", 8080))
+    try:
+        server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+        logger.info(f"Health check HTTP server started on port {port}")
+        server.serve_forever()
+    except Exception as e:
+        logger.error(f"Error starting health check HTTP server: {e}")
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command with auto-subscription."""
@@ -123,7 +147,6 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_json = bool(find_json_credentials())
     subscribers = config.load_subscribers()
     
-    # Filter non-system env var names for diagnostic output
     user_envs = [k for k in os.environ.keys() if not k.startswith("PATH") and not k.startswith("HOME") and not k.startswith("NIX") and not k.startswith("LC_")]
 
     try:
@@ -264,6 +287,9 @@ def main():
     logger.info(f"Calendar ID: {config.GOOGLE_CALENDAR_ID}")
     logger.info("==========================================")
 
+    # Start HTTP Health Check Server in a background thread for Render Free Web Service
+    threading.Thread(target=start_health_server, daemon=True).start()
+
     missing = config.validate_config()
     if missing:
         logger.warning(
@@ -272,8 +298,7 @@ def main():
 
     if not config.TELEGRAM_BOT_TOKEN or config.TELEGRAM_BOT_TOKEN == "your_telegram_bot_token_here":
         logger.error("❌ Error: TELEGRAM_BOT_TOKEN is not set in Environment Variables!")
-        logger.error("Please add TELEGRAM_BOT_TOKEN in Railway Variables tab.")
-        # Sleep to keep container alive for debugging logs
+        logger.error("Please add TELEGRAM_BOT_TOKEN in Environment Variables.")
         import time
         while True:
             time.sleep(60)
