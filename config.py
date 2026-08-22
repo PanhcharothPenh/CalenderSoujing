@@ -2,6 +2,7 @@ import os
 import sys
 import site
 import json
+import base64
 import logging
 from pathlib import Path
 from typing import List, Set, Union
@@ -29,12 +30,25 @@ DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "07:00")
 SUBSCRIBERS_FILE = BASE_DIR / "subscribers.json"
 
 def has_inline_json_credentials() -> bool:
-    """Check if any environment variable contains Service Account JSON data."""
+    """Check if any environment variable contains Service Account JSON data or Base64 string."""
     for key, val in os.environ.items():
         if not val:
             continue
         v_strip = val.strip()
-        if ("service_account" in v_strip or "private_key" in v_strip) and "{" in v_strip:
+
+        # Check base64
+        if not v_strip.startswith("{") and len(v_strip) > 50:
+            try:
+                decoded = base64.b64decode(v_strip).decode("utf-8", errors="ignore")
+                if "service_account" in decoded and "{" in decoded:
+                    return True
+            except Exception:
+                pass
+
+        if (v_strip.startswith("'") and v_strip.endswith("'")) or (v_strip.startswith('"') and v_strip.endswith('"')):
+            v_strip = v_strip[1:-1].strip()
+
+        if "{" in v_strip and ("service_account" in v_strip or "private_key" in v_strip or "client_email" in v_strip):
             return True
     return False
 

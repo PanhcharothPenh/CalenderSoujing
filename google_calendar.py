@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import datetime
 import logging
 import pytz
@@ -12,16 +13,28 @@ SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 logger = logging.getLogger(__name__)
 
 def find_json_credentials() -> str:
-    """Scan all environment variables for Service Account JSON data."""
+    """Scan all environment variables for Service Account JSON or Base64 encoded JSON data."""
     for key, val in os.environ.items():
         if not val:
             continue
         v_strip = val.strip()
+
+        # Try base64 decoding first
+        if not v_strip.startswith("{") and len(v_strip) > 50:
+            try:
+                decoded = base64.b64decode(v_strip).decode("utf-8", errors="ignore")
+                if "service_account" in decoded and "{" in decoded:
+                    logger.info(f"Found Google Service Account Base64 JSON in env var: {key}")
+                    return decoded
+            except Exception:
+                pass
+
+        # Strip surrounding quotes if present
         if (v_strip.startswith("'") and v_strip.endswith("'")) or (v_strip.startswith('"') and v_strip.endswith('"')):
             v_strip = v_strip[1:-1].strip()
-            
+
         if "{" in v_strip and ("service_account" in v_strip or "private_key" in v_strip or "client_email" in v_strip):
-            logger.info(f"Found Google Service Account JSON in environment variable: {key}")
+            logger.info(f"Found Google Service Account JSON in env var: {key}")
             return v_strip
     return ""
 
@@ -43,7 +56,7 @@ class GoogleCalendarManager:
         self.tz = pytz.timezone(config.TIMEZONE)
 
     def authenticate(self):
-        """Authenticate using Service Account credentials file or raw JSON env var."""
+        """Authenticate using Service Account credentials file or raw/base64 JSON env var."""
         raw_str = find_json_credentials()
 
         if raw_str:
@@ -59,7 +72,7 @@ class GoogleCalendarManager:
                 credentials = service_account.Credentials.from_service_account_info(
                     info, scopes=SCOPES
                 )
-                logger.info("Authenticated with Google Calendar API using inline JSON environment variable.")
+                logger.info("Authenticated with Google Calendar API using inline/base64 JSON environment variable.")
                 self.service = build('calendar', 'v3', credentials=credentials)
                 return
             except Exception as parse_err:
