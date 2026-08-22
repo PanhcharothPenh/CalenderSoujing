@@ -17,7 +17,10 @@ def find_json_credentials() -> str:
         if not val:
             continue
         v_strip = val.strip()
-        if ("service_account" in v_strip or "private_key" in v_strip) and "{" in v_strip:
+        if (v_strip.startswith("'") and v_strip.endswith("'")) or (v_strip.startswith('"') and v_strip.endswith('"')):
+            v_strip = v_strip[1:-1].strip()
+            
+        if "{" in v_strip and ("service_account" in v_strip or "private_key" in v_strip or "client_email" in v_strip):
             logger.info(f"Found Google Service Account JSON in environment variable: {key}")
             return v_strip
     return ""
@@ -66,9 +69,10 @@ class GoogleCalendarManager:
         cred_path = config.get_credentials_path()
         if not cred_path.exists():
             raise FileNotFoundError(
-                "Google Service Account Credentials Not Found!\n"
-                "សូមបញ្ចូល Variable ឈ្មោះ GOOGLE_SERVICE_ACCOUNT_JSON ក្នុង Railway (Variables) "
-                "ឬដាក់ file credentials.json ក្នុង project folder"
+                "Google Service Account Credentials Not Found!\n\n"
+                "សូមចូលទៅកាន់ Railway (Variables) រួចបង្កើត Variable ឈ្មោះ:\n"
+                "GOOGLE_SERVICE_ACCOUNT_JSON\n"
+                "ហើយបិទភ្ជាប់ (Paste) អត្ថបទ JSON Key របស់អ្នកចូល!"
             )
 
         credentials = service_account.Credentials.from_service_account_file(
