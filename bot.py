@@ -252,17 +252,25 @@ async def post_init(application: Application):
     logger.info("Scheduler started successfully for reminders and daily summary.")
 
 def main():
+    logger.info("==========================================")
+    logger.info("Starting Google Calendar Telegram Bot...")
+    logger.info(f"Timezone: {config.TIMEZONE}")
+    logger.info(f"Calendar ID: {config.GOOGLE_CALENDAR_ID}")
+    logger.info("==========================================")
+
     missing = config.validate_config()
     if missing:
         logger.warning(
-            "⚠️ Config validation warning:\nMissing parameters:\n - " + "\n - ".join(missing) +
-            "\nBot will start, but Google Calendar features require valid configuration in .env and credentials.json!"
+            "⚠️ Config validation warning:\nMissing parameters:\n - " + "\n - ".join(missing)
         )
 
     if not config.TELEGRAM_BOT_TOKEN or config.TELEGRAM_BOT_TOKEN == "your_telegram_bot_token_here":
-        print("❌ Error: TELEGRAM_BOT_TOKEN is not set in .env file.")
-        print("Please configure .env before starting the bot.")
-        return
+        logger.error("❌ Error: TELEGRAM_BOT_TOKEN is not set in Environment Variables!")
+        logger.error("Please add TELEGRAM_BOT_TOKEN in Railway Variables tab.")
+        # Sleep to keep container alive for debugging logs
+        import time
+        while True:
+            time.sleep(60)
 
     # Build Application
     application = (
