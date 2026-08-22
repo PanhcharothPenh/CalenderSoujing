@@ -1,8 +1,10 @@
 import os
 import sys
 import site
+import json
+import logging
 from pathlib import Path
-from typing import List
+from typing import List, Set
 
 # Ensure user site packages are in sys.path
 user_site = site.getusersitepackages()
@@ -11,6 +13,7 @@ if user_site not in sys.path:
 
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 
 # Load environment variables from .env file
@@ -23,6 +26,7 @@ GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "credenti
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Phnom_Penh")
 REMINDER_MINUTES = int(os.getenv("REMINDER_MINUTES", "15"))
 DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "07:00")
+SUBSCRIBERS_FILE = BASE_DIR / "subscribers.json"
 
 def get_credentials_path() -> Path:
     path = Path(GOOGLE_SERVICE_ACCOUNT_FILE)
@@ -30,19 +34,60 @@ def get_credentials_path() -> Path:
         path = BASE_DIR / path
     return path
 
-def get_chat_ids() -> List[str]:
-    """Parse TELEGRAM_CHAT_ID which can be a single ID or comma-separated list of IDs."""
+def get_env_chat_ids() -> List[str]:
+    """Parse TELEGRAM_CHAT_ID from .env if specified."""
     raw = os.getenv("TELEGRAM_CHAT_ID", "")
     if not raw or raw == "your_telegram_chat_id_here":
         return []
     return [cid.strip() for cid in raw.split(",") if cid.strip()]
 
+def load_subscribers() -> Set[str]:
+    """Load all registered subscriber chat IDs from subscribers.json and env vars."""
+    subscribers = set(get_env_chat_ids())
+    
+    if SUBSCRIBERS_FILE.exists():
+        try:
+            with open(SUBSCRIBERS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    for item in data:
+                        subscribers.add(str(item))
+        except Exception as e:
+            logger.error(f"Error reading subscribers.json: {e}")
+            
+    return subscribers
+
+def add_subscriber(chat_id: str | int) -> bool:
+    """Add a chat ID to subscribers list."""
+    subscribers = load_subscribers()
+    chat_str = str(chat_id)
+    is_new = chat_str not in subscribers
+    subscribers.add(chat_str)
+    _save_subscribers(subscribers)
+    return is_new
+
+def remove_subscriber(chat_id: str | int) -> bool:
+    """Remove a chat ID from subscribers list."""
+    subscribers = load_subscribers()
+    chat_str = str(chat_id)
+    if chat_str in subscribers:
+        subscribers.remove(chat_str)
+        _save_subscribers(subscribers)
+        return True
+    return False
+
+def _save_subscribers(subscribers: Set[str]):
+    """Internal helper to save subscribers to subscribers.json."""
+    try:
+        with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(sorted(list(subscribers)), f, indent=2)
+    except Exception as e:
+        logger.error(f"Error writing subscribers.json: {e}")
+
 def validate_config() -> list:
     missing = []
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "your_telegram_bot_token_here":
         missing.append("TELEGRAM_BOT_TOKEN")
-    if not get_chat_ids():
-        missing.append("TELEGRAM_CHAT_ID")
     
     has_json_env = bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON"))
     cred_path = get_credentials_path()

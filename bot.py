@@ -28,40 +28,56 @@ calendar_mgr = GoogleCalendarManager()
 sent_reminders: Set[str] = set()
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command."""
+    """Handle /start command with auto-subscription."""
     chat_id = update.effective_chat.id
+    is_new = config.add_subscriber(chat_id)
+    
+    status_text = (
+        "🎉 <b>អ្នកបានចុះឈ្មោះទទួលការជូនដំណឹងដោយស្វ័យប្រវត្តិរួចរាល់ហើយ!</b>"
+        if is_new else
+        "✅ <b>អ្នកកំពុងស្ថិតក្នុងបញ្ជីទទួលការជូនដំណឹងស្រាប់!</b>"
+    )
+
     welcome_text = (
         f"👋 <b>ជម្រាបសួរ! ខ្ញុំជា Telegram Bot ជូនដំណឹងពី Google Calendar</b>\n\n"
-        f"🆔 <b>Chat ID របស់អ្នកគឺ:</b> <code>{chat_id}</code>\n"
-        f"<i>(អាចយក Chat ID នេះទៅបន្ថែមក្នុង TELEGRAM_CHAT_ID ដោយបំបែកដោយសញ្ញាក្បៀស , )</i>\n\n"
+        f"{status_text}\n"
+        f"🆔 <b>Chat ID របស់អ្នក:</b> <code>{chat_id}</code>\n\n"
         f"<b>📋 ពាក្យបញ្ជាដែលមាន (Commands):</b>\n"
         f"• /today - មើល Event ទាំងអស់សម្រាប់ថ្ងៃនេះ\n"
         f"• /upcoming - មើល Event ជិតមកដល់ក្នុងរយៈពេល ៧ ថ្ងៃ\n"
-        f"• /status - ពិនិត្យស្ថានភាព Connection ទៅកាន់ Google Calendar\n"
-        f"• /myid - បង្ហាញ Chat ID របស់អ្នក\n"
+        f"• /status - ពិនិត្យស្ថានភាព Connection និងចំនួនអ្នកចុះឈ្មោះ\n"
+        f"• /stop - លុបការចុះឈ្មោះទទួលសារជូនដំណឹង\n"
         f"• /help - ការណែនាំបន្ថែម\n"
     )
     await update.message.reply_text(welcome_text, parse_mode="HTML")
 
-async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /myid command to show current Chat ID."""
+async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /stop or /unsubscribe command."""
     chat_id = update.effective_chat.id
-    await update.message.reply_text(
-        f"🆔 <b>Chat ID របស់អ្នកគឺ:</b> <code>{chat_id}</code>",
-        parse_mode="HTML"
-    )
+    removed = config.remove_subscriber(chat_id)
+    if removed:
+        await update.message.reply_text(
+            "🔕 <b>អ្នកបានលុបការចុះឈ្មោះទទួលសារជូនដំណឹងរួចរាល់ហើយ!</b>\n"
+            "ប្រសិនបើចង់ចុះឈ្មោះសារជាថ្មី សូមផ្ញើសារ /start",
+            parse_mode="HTML"
+        )
+    else:
+        await update.message.reply_text(
+            "ℹ️ អ្នកមិនទាន់បានចុះឈ្មោះទទួលសារនៅឡើយទេ។ ផ្ញើសារ /start ដើម្បីចុះឈ្មោះ។",
+            parse_mode="HTML"
+        )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command."""
     help_text = (
         "ℹ️ <b>ការណែនាំប្រើប្រាស់ Bot:</b>\n\n"
-        "• Bot នេះនឹងផ្ញើសារជូនដំណឹងដោយស្វ័យប្រវត្តិ ទៅកាន់ Chat ID ទាំងអស់ដែលបានរៀបចំទុក។\n"
+        "• គ្រាន់តែចុច /start អ្នកនឹងត្រូវបានចុះឈ្មោះទទួលសារជូនដំណឹងដោយស្វ័យប្រវត្តិ ⚡\n"
         "• ជូនដំណឹងនៅពេលមាន Event ជិតដល់ម៉ោង (ឧ. ១៥នាទីមុន)។\n"
         "• ផ្ញើសារសង្ខេប Event សម្រាប់ថ្ងៃថ្មីរៀងរាល់ព្រឹក ម៉ោង ៧:០០ ព្រឹក។\n\n"
         "<b>ពាក្យបញ្ជាផ្សេងៗ:</b>\n"
         "/today - បង្ហាញ Event ថ្ងៃនេះ\n"
         "/upcoming - បង្ហាញ Event ៧ថ្ងៃខាងមុខ\n"
-        "/myid - បង្ហាញ Chat ID របស់អ្នក\n"
+        "/stop - លុបការចុះឈ្មោះ\n"
         "/status - ពិនិត្យស្ថានភាពប្រព័ន្ធ\n"
     )
     await update.message.reply_text(help_text, parse_mode="HTML")
@@ -110,13 +126,13 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         events = calendar_mgr.get_today_events()
-        chat_ids = config.get_chat_ids()
+        subscribers = config.load_subscribers()
         status_msg = (
             "✅ <b>ប្រព័ន្ធដំណើរការជាប្រក្រតី!</b>\n\n"
             "• Google Calendar API: Connected\n"
             f"• Calendar ID: <code>{config.GOOGLE_CALENDAR_ID}</code>\n"
             f"• Timezone: {config.TIMEZONE}\n"
-            f"• Target Chats ({len(chat_ids)}): <code>{', '.join(chat_ids)}</code>\n"
+            f"• Auto Subscribers ({len(subscribers)}): <code>{', '.join(subscribers) if subscribers else 'គ្មានអ្នកចុះឈ្មោះ'}</code>\n"
             f"• Reminder: {config.REMINDER_MINUTES} នាទីមុន Event\n"
             f"• Daily Summary: ម៉ោង {config.DAILY_SUMMARY_TIME}\n"
             f"• Events ថ្ងៃនេះ: {len(events)} Event\n"
@@ -126,9 +142,9 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ <b>Google Calendar Connection Error:</b>\n<code>{e}</code>", parse_mode="HTML")
 
 async def check_upcoming_reminders(bot):
-    """Background task to check and send reminders for events starting soon to all configured chats."""
-    chat_ids = config.get_chat_ids()
-    if not chat_ids:
+    """Background task to check and send reminders for events starting soon to all subscribers."""
+    subscribers = config.load_subscribers()
+    if not subscribers:
         return
 
     try:
@@ -159,8 +175,8 @@ async def check_upcoming_reminders(bot):
                     f"{event_details}"
                 )
                 
-                # Send to all configured chats
-                for chat_id in chat_ids:
+                # Send to all registered subscribers
+                for chat_id in subscribers:
                     try:
                         await bot.send_message(
                             chat_id=chat_id,
@@ -168,7 +184,7 @@ async def check_upcoming_reminders(bot):
                             parse_mode="HTML",
                             disable_web_page_preview=True
                         )
-                        logger.info(f"Sent reminder for event '{event.get('summary')}' to chat_id: {chat_id}")
+                        logger.info(f"Sent reminder for event '{event.get('summary')}' to subscriber chat_id: {chat_id}")
                     except Exception as send_err:
                         logger.error(f"Failed to send reminder to chat_id {chat_id}: {send_err}")
 
@@ -178,9 +194,9 @@ async def check_upcoming_reminders(bot):
         logger.error(f"Error in check_upcoming_reminders scheduler: {e}")
 
 async def send_daily_summary(bot):
-    """Background task to send daily summary of events to all configured chats."""
-    chat_ids = config.get_chat_ids()
-    if not chat_ids:
+    """Background task to send daily summary of events to all subscribers."""
+    subscribers = config.load_subscribers()
+    if not subscribers:
         return
 
     try:
@@ -195,7 +211,7 @@ async def send_daily_summary(bot):
             for idx, event in enumerate(events, 1):
                 msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
 
-        for chat_id in chat_ids:
+        for chat_id in subscribers:
             try:
                 await bot.send_message(
                     chat_id=chat_id,
@@ -203,7 +219,7 @@ async def send_daily_summary(bot):
                     parse_mode="HTML",
                     disable_web_page_preview=True
                 )
-                logger.info(f"Sent daily summary notification to chat_id: {chat_id}")
+                logger.info(f"Sent daily summary notification to subscriber chat_id: {chat_id}")
             except Exception as send_err:
                 logger.error(f"Failed to send daily summary to chat_id {chat_id}: {send_err}")
 
@@ -258,8 +274,9 @@ def main():
 
     # Register Handlers
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("stop", stop_command))
+    application.add_handler(CommandHandler("unsubscribe", stop_command))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("myid", myid_command))
     application.add_handler(CommandHandler("today", today_command))
     application.add_handler(CommandHandler("upcoming", upcoming_command))
     application.add_handler(CommandHandler("status", status_command))
