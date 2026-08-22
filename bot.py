@@ -33,24 +33,35 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         f"👋 <b>ជម្រាបសួរ! ខ្ញុំជា Telegram Bot ជូនដំណឹងពី Google Calendar</b>\n\n"
         f"🆔 <b>Chat ID របស់អ្នកគឺ:</b> <code>{chat_id}</code>\n"
-        f"<i>(សូមយក Chat ID នេះទៅដាក់ក្នុង file .env ត្រង់ TELEGRAM_CHAT_ID)</i>\n\n"
+        f"<i>(អាចយក Chat ID នេះទៅបន្ថែមក្នុង TELEGRAM_CHAT_ID ដោយបំបែកដោយសញ្ញាក្បៀស , )</i>\n\n"
         f"<b>📋 ពាក្យបញ្ជាដែលមាន (Commands):</b>\n"
         f"• /today - មើល Event ទាំងអស់សម្រាប់ថ្ងៃនេះ\n"
         f"• /upcoming - មើល Event ជិតមកដល់ក្នុងរយៈពេល ៧ ថ្ងៃ\n"
         f"• /status - ពិនិត្យស្ថានភាព Connection ទៅកាន់ Google Calendar\n"
+        f"• /myid - បង្ហាញ Chat ID របស់អ្នក\n"
         f"• /help - ការណែនាំបន្ថែម\n"
     )
     await update.message.reply_text(welcome_text, parse_mode="HTML")
+
+async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /myid command to show current Chat ID."""
+    chat_id = update.effective_chat.id
+    await update.message.reply_text(
+        f"🆔 <b>Chat ID របស់អ្នកគឺ:</b> <code>{chat_id}</code>",
+        parse_mode="HTML"
+    )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command."""
     help_text = (
         "ℹ️ <b>ការណែនាំប្រើប្រាស់ Bot:</b>\n\n"
-        "• Bot នេះនឹងផ្ញើសារជូនដំណឹងដោយស្វ័យប្រវត្តិ នៅពេលមាន Event ជិតដល់ម៉ោង (ឧ. ១៥នាទីមុន)។\n"
-        "• Bot នឹងផ្ញើសារសង្ខេប Event សម្រាប់ថ្ងៃថ្មីរៀងរាល់ព្រឹក ម៉ោង ៧:០០ ព្រឹក។\n\n"
+        "• Bot នេះនឹងផ្ញើសារជូនដំណឹងដោយស្វ័យប្រវត្តិ ទៅកាន់ Chat ID ទាំងអស់ដែលបានរៀបចំទុក។\n"
+        "• ជូនដំណឹងនៅពេលមាន Event ជិតដល់ម៉ោង (ឧ. ១៥នាទីមុន)។\n"
+        "• ផ្ញើសារសង្ខេប Event សម្រាប់ថ្ងៃថ្មីរៀងរាល់ព្រឹក ម៉ោង ៧:០០ ព្រឹក។\n\n"
         "<b>ពាក្យបញ្ជាផ្សេងៗ:</b>\n"
         "/today - បង្ហាញ Event ថ្ងៃនេះ\n"
         "/upcoming - បង្ហាញ Event ៧ថ្ងៃខាងមុខ\n"
+        "/myid - បង្ហាញ Chat ID របស់អ្នក\n"
         "/status - ពិនិត្យស្ថានភាពប្រព័ន្ធ\n"
     )
     await update.message.reply_text(help_text, parse_mode="HTML")
@@ -99,11 +110,13 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         events = calendar_mgr.get_today_events()
+        chat_ids = config.get_chat_ids()
         status_msg = (
             "✅ <b>ប្រព័ន្ធដំណើរការជាប្រក្រតី!</b>\n\n"
             "• Google Calendar API: Connected\n"
             f"• Calendar ID: <code>{config.GOOGLE_CALENDAR_ID}</code>\n"
             f"• Timezone: {config.TIMEZONE}\n"
+            f"• Target Chats ({len(chat_ids)}): <code>{', '.join(chat_ids)}</code>\n"
             f"• Reminder: {config.REMINDER_MINUTES} នាទីមុន Event\n"
             f"• Daily Summary: ម៉ោង {config.DAILY_SUMMARY_TIME}\n"
             f"• Events ថ្ងៃនេះ: {len(events)} Event\n"
@@ -113,8 +126,9 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ <b>Google Calendar Connection Error:</b>\n<code>{e}</code>", parse_mode="HTML")
 
 async def check_upcoming_reminders(bot):
-    """Background task to check and send reminders for events starting soon."""
-    if not config.TELEGRAM_CHAT_ID or config.TELEGRAM_CHAT_ID == "your_telegram_chat_id_here":
+    """Background task to check and send reminders for events starting soon to all configured chats."""
+    chat_ids = config.get_chat_ids()
+    if not chat_ids:
         return
 
     try:
@@ -144,21 +158,29 @@ async def check_upcoming_reminders(bot):
                     f"🔔 <b>[ការជូនដំណឹង] Event ជិតដល់ម៉ោងក្នុងពេល {int(time_diff)} នាទីទៀត!</b>\n\n"
                     f"{event_details}"
                 )
-                await bot.send_message(
-                    chat_id=config.TELEGRAM_CHAT_ID,
-                    text=msg,
-                    parse_mode="HTML",
-                    disable_web_page_preview=True
-                )
+                
+                # Send to all configured chats
+                for chat_id in chat_ids:
+                    try:
+                        await bot.send_message(
+                            chat_id=chat_id,
+                            text=msg,
+                            parse_mode="HTML",
+                            disable_web_page_preview=True
+                        )
+                        logger.info(f"Sent reminder for event '{event.get('summary')}' to chat_id: {chat_id}")
+                    except Exception as send_err:
+                        logger.error(f"Failed to send reminder to chat_id {chat_id}: {send_err}")
+
                 sent_reminders.add(reminder_key)
-                logger.info(f"Sent reminder for event: {event.get('summary')}")
 
     except Exception as e:
         logger.error(f"Error in check_upcoming_reminders scheduler: {e}")
 
 async def send_daily_summary(bot):
-    """Background task to send daily summary of events."""
-    if not config.TELEGRAM_CHAT_ID or config.TELEGRAM_CHAT_ID == "your_telegram_chat_id_here":
+    """Background task to send daily summary of events to all configured chats."""
+    chat_ids = config.get_chat_ids()
+    if not chat_ids:
         return
 
     try:
@@ -173,13 +195,18 @@ async def send_daily_summary(bot):
             for idx, event in enumerate(events, 1):
                 msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
 
-        await bot.send_message(
-            chat_id=config.TELEGRAM_CHAT_ID,
-            text=msg,
-            parse_mode="HTML",
-            disable_web_page_preview=True
-        )
-        logger.info("Sent daily summary notification.")
+        for chat_id in chat_ids:
+            try:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=msg,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True
+                )
+                logger.info(f"Sent daily summary notification to chat_id: {chat_id}")
+            except Exception as send_err:
+                logger.error(f"Failed to send daily summary to chat_id {chat_id}: {send_err}")
+
     except Exception as e:
         logger.error(f"Error sending daily summary: {e}")
 
@@ -232,6 +259,7 @@ def main():
     # Register Handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("myid", myid_command))
     application.add_handler(CommandHandler("today", today_command))
     application.add_handler(CommandHandler("upcoming", upcoming_command))
     application.add_handler(CommandHandler("status", status_command))
