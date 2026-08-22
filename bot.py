@@ -1,3 +1,4 @@
+import os
 import datetime
 import logging
 import asyncio
@@ -14,7 +15,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 import config
-from google_calendar import GoogleCalendarManager
+from google_calendar import GoogleCalendarManager, find_json_credentials
 
 # Configure logging
 logging.basicConfig(
@@ -45,7 +46,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"<b>📋 ពាក្យបញ្ជាដែលមាន (Commands):</b>\n"
         f"• /today - មើល Event ទាំងអស់សម្រាប់ថ្ងៃនេះ\n"
         f"• /upcoming - មើល Event ជិតមកដល់ក្នុងរយៈពេល ៧ ថ្ងៃ\n"
-        f"• /status - ពិនិត្យស្ថានភាព Connection និងចំនួនអ្នកចុះឈ្មោះ\n"
+        f"• /status - ពិនិត្យស្ថានភាព Connection និងសារដើម\n"
         f"• /stop - លុបការចុះឈ្មោះទទួលសារជូនដំណឹង\n"
         f"• /help - ការណែនាំបន្ថែម\n"
     )
@@ -119,27 +120,32 @@ async def upcoming_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status command."""
     missing = config.validate_config()
-    if missing:
-        status_msg = f"⚠️ <b>ប្រព័ន្ធមិនទាន់រៀបចំរួចរាល់ទេ!</b>\n\nខ្វះខាត Configuration:\n- " + "\n- ".join(missing)
-        await update.message.reply_text(status_msg, parse_mode="HTML")
-        return
+    has_json = bool(find_json_credentials())
+    subscribers = config.load_subscribers()
+    
+    # Filter non-system env var names for diagnostic output
+    user_envs = [k for k in os.environ.keys() if not k.startswith("PATH") and not k.startswith("HOME") and not k.startswith("NIX") and not k.startswith("LC_")]
 
     try:
         events = calendar_mgr.get_today_events()
-        subscribers = config.load_subscribers()
         status_msg = (
             "✅ <b>ប្រព័ន្ធដំណើរការជាប្រក្រតី!</b>\n\n"
-            "• Google Calendar API: Connected\n"
+            "• Google Credentials Detected: " + ("Yes ✅" if has_json else "No ❌") + "\n"
             f"• Calendar ID: <code>{config.GOOGLE_CALENDAR_ID}</code>\n"
             f"• Timezone: {config.TIMEZONE}\n"
-            f"• Auto Subscribers ({len(subscribers)}): <code>{', '.join(subscribers) if subscribers else 'គ្មានអ្នកចុះឈ្មោះ'}</code>\n"
-            f"• Reminder: {config.REMINDER_MINUTES} នាទីមុន Event\n"
-            f"• Daily Summary: ម៉ោង {config.DAILY_SUMMARY_TIME}\n"
+            f"• Auto Subscribers ({len(subscribers)}): <code>{', '.join(subscribers) if subscribers else 'គ្មាន'}</code>\n"
+            f"• Env Variables ({len(user_envs)}): <code>{', '.join(user_envs)}</code>\n"
             f"• Events ថ្ងៃនេះ: {len(events)} Event\n"
         )
         await update.message.reply_text(status_msg, parse_mode="HTML")
     except Exception as e:
-        await update.message.reply_text(f"❌ <b>Google Calendar Connection Error:</b>\n<code>{e}</code>", parse_mode="HTML")
+        status_msg = (
+            "⚠️ <b>ស្ថានភាពប្រព័ន្ធ (System Status):</b>\n\n"
+            "• Google Credentials Detected: " + ("Yes ✅" if has_json else "No ❌") + "\n"
+            f"• Environment Variables Found ({len(user_envs)}): <code>{', '.join(user_envs)}</code>\n"
+            f"• Error: <code>{e}</code>\n"
+        )
+        await update.message.reply_text(status_msg, parse_mode="HTML")
 
 async def check_upcoming_reminders(bot):
     """Background task to check and send reminders for events starting soon to all subscribers."""
