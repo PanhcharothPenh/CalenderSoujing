@@ -32,7 +32,14 @@ class GoogleCalendarManager:
         """Authenticate using Service Account credentials file or raw JSON env var."""
         service_account_json_env = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
         if service_account_json_env:
-            info = json.loads(service_account_json_env)
+            raw_str = service_account_json_env.strip()
+            try:
+                info = json.loads(raw_str)
+            except Exception:
+                # Handle double escaped newlines
+                cleaned_str = raw_str.replace('\\n', '\n')
+                info = json.loads(cleaned_str)
+
             credentials = service_account.Credentials.from_service_account_info(
                 info, scopes=SCOPES
             )
