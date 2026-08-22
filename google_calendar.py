@@ -88,6 +88,7 @@ class GoogleCalendarManager:
         summary = event.get('summary', 'No Title (គ្មានចំណងជើង)')
         description = event.get('description', '')
         location = event.get('location', '')
+        hangout_link = event.get('hangoutLink', '')
         html_link = event.get('htmlLink', '')
 
         start = event.get('start', {})
@@ -105,6 +106,12 @@ class GoogleCalendarManager:
 
         if location:
             msg += f"📍 <b>ទីតាំង:</b> {location}\n"
+        else:
+            msg += "📍 <b>ទីតាំង:</b> មិនទាន់បានកំណត់\n"
+
+        if hangout_link:
+            msg += f"📹 <b>Google Meet:</b> <a href='{hangout_link}'>ចុចត្រង់នេះដើម្បីចូលរៀន/ប្រជុំ</a>\n"
+
         if description:
             # Shorten description if too long
             desc_text = description[:200] + ('...' if len(description) > 200 else '')
