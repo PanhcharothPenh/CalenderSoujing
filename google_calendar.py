@@ -11,6 +11,18 @@ import config
 SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 logger = logging.getLogger(__name__)
 
+def get_khmer_period(dt: datetime.datetime) -> str:
+    """Return Khmer period of day name (ព្រឹក, រសៀល, ល្ងាច, យប់) based on hour."""
+    hour = dt.hour
+    if 5 <= hour < 12:
+        return "ព្រឹក"      # Morning (05:00 - 11:59)
+    elif 12 <= hour < 17:
+        return "រសៀល"    # Afternoon (12:00 - 16:59)
+    elif 17 <= hour < 21:
+        return "ល្ងាច"     # Evening (17:00 - 20:59)
+    else:
+        return "យប់"       # Night (21:00 - 04:59)
+
 class GoogleCalendarManager:
     def __init__(self):
         self.service = None
@@ -89,7 +101,6 @@ class GoogleCalendarManager:
         description = event.get('description', '')
         location = event.get('location', '')
         hangout_link = event.get('hangoutLink', '')
-        html_link = event.get('htmlLink', '')
 
         start = event.get('start', {})
         end = event.get('end', {})
@@ -97,7 +108,14 @@ class GoogleCalendarManager:
         if 'dateTime' in start:
             start_dt = datetime.datetime.fromisoformat(start['dateTime']).astimezone(self.tz)
             end_dt = datetime.datetime.fromisoformat(end['dateTime']).astimezone(self.tz)
-            time_str = f"⏰ <b>{start_dt.strftime('%H:%M')} - {end_dt.strftime('%H:%M')}</b> ({start_dt.strftime('%d/%m/%Y')})"
+            
+            start_period = get_khmer_period(start_dt)
+            end_period = get_khmer_period(end_dt)
+            
+            if start_period == end_period:
+                time_str = f"⏰ <b>{start_dt.strftime('%H:%M')} - {end_dt.strftime('%H:%M')} {start_period}</b> ({start_dt.strftime('%d/%m/%Y')})"
+            else:
+                time_str = f"⏰ <b>{start_dt.strftime('%H:%M')} {start_period} - {end_dt.strftime('%H:%M')} {end_period}</b> ({start_dt.strftime('%d/%m/%Y')})"
         else:
             # All-day event
             time_str = f"📅 <b>ពេញមួយថ្ងៃ ({start.get('date')})</b>"
