@@ -4,7 +4,7 @@ import site
 import json
 import logging
 from pathlib import Path
-from typing import List, Set
+from typing import List, Set, Union
 
 # Ensure user site packages are in sys.path
 user_site = site.getusersitepackages()
@@ -57,7 +57,7 @@ def load_subscribers() -> Set[str]:
             
     return subscribers
 
-def add_subscriber(chat_id: str | int) -> bool:
+def add_subscriber(chat_id: Union[str, int]) -> bool:
     """Add a chat ID to subscribers list."""
     subscribers = load_subscribers()
     chat_str = str(chat_id)
@@ -66,7 +66,7 @@ def add_subscriber(chat_id: str | int) -> bool:
     _save_subscribers(subscribers)
     return is_new
 
-def remove_subscriber(chat_id: str | int) -> bool:
+def remove_subscriber(chat_id: Union[str, int]) -> bool:
     """Remove a chat ID from subscribers list."""
     subscribers = load_subscribers()
     chat_str = str(chat_id)
