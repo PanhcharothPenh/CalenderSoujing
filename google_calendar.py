@@ -12,7 +12,7 @@ import config
 SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 logger = logging.getLogger(__name__)
 
-DEFAULT_CREDENTIALS_B64 = "ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAidmlydHVhbC0yODM3MTUiLAogICJwcml2YXRlX2tleV9pZCI6ICI0OWNmYmVmNGEyOTE2MmI2NWIzZGE0NDVkZWM1NjM4Mjc5NDg2MDQ0IiwKICAicHJpdmF0ZV9rZXkiOiAiLS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tXG5NSUlFdndJQkFEQU5CZ2txaGtpRzl3MEJBUUVGQUFTQ0JLa3dnZ1NsQWdFQUFvSUJBUURQT2NnUXNhd3ZxeVhvXG4xa0hmYytTRFR5d3BpeExtZURRYzNkQ1ArNE9SSERKYTBRQUFSTEs5VnFtLzdzZTlZNHc3ekgyY0s2UjdTcDBKXG5LWTVibS9IUmFiWTdMZ0ozaVZhRkZUTDE5K1NYZUxVdm05TTk5WTh6M3NNb09UUlNiNEcrb00wN1FaWWp0Y2Q5XG5zMjlGaUNPa25PajVKckkwcEthUDBGcjhUdE44bGcxQVJsUWgyV2FXTng4ckZkK1BFT0twOHpYTVBxaU5UNVhwXG5WbU04a2RSMW01dUNCK0F2YmRmc24rS283SGhEbUdnTS9VQWJtOVF6WlBtYjd1TnNIdlg5K0dZRVI4OTNYYy9KXG5Jc3h4L1FFQytmNzRPTmlzV2xSalBxa0pvd1V2eitDeWRXVk1MUkU5cjEyL1N2TjZKcXorNXNiemE1RklxMXhEXG52OENEcmtZdEFnTUJBQUVDZ2dFQUJ5Vmk5TkJyczZrZlFZeEI4VWE1MXAxZ1ZINXJSRzlZdkxZWmZ4MlpSK1BGXG5DTVMwVDA0UEsrQlZNajAxdmg0MHM4czFlYkUzbHRqWDJYMEpYN2RjKzIrOXpRU2xLU0lmVGErUmRsSDZIQThaXG5rRzY3TmlQRnNIQTZJcVQyWFBGamRBTnZrRitPb2VTZTRJTFRqMzVHWEdMYzFkcXp3b1Q3Q1hLUjhLbDNPWkNUXG5OOW0wK3RiWHNXV1NweGZIV25vL3hNSjVJTDRiYTU3bUFuZFBvSU8wZ25YRW5sY0xaV1k4eGVLM0tQdzd6NllYXG5ZUFYzSUg5SURZTXdtektpczFCKytEUzh2Y1UxcHM3WnZubVVnQ0ZwVDdMUlBSVVpLWDNNTTlzakljWGk0NHpCXG40MEVDaGdJREFpSDhJcHEwM1BUMWt6a2VXRXEvQ2R5ZzJtS3lTeSswc1FLQmdRRHRiTVN2aWxDQ3VHb3c3ejRFXG5XNS94YUEzd0dtcFdHVVIyMU81U1h0TGpQa0FLb1hSK2tXS0hNZEFxZXdtSnNNNThjYTJXWm42aEtsODdYZFdYXG5nYWw4SkJFSVlmRzJoNmljbDB4Mkt2dWFaazcvMzBxUVJtQ3dna2JaZU9LM2c4Yk1RcEpVYTM2SkYzQWdZMGhOXG5YTWNQQlJBMFJiQzF6YmI5eGJocldTcWk2d0tCZ1FEZmNDeGQyTTBGWGxZMnAyZXFBc2M2eFg0MGtOY0ZyeUx6XG5iWVJmdVpMZ05OV05zWDNqbXlQOVdJd1c2UldXcjVKTXJWYm5HejNDazhHSjNhektqKzR4dXF4YkZhZTRiTFN2XG5NWFh4ZnZrVTdjSC9qOVNudFdLUkhVNERrWXJEVUl6RXNNNEZxVmZnQ0s3bDJFcE1jSWwzNVNUSCsvMzkyTWlRXG5jZGlXTXVXRlJ3S0JnUUNadGNwY2oySnlUdXhKQkFxVmpiQXQvUnpRN25rYmhyNUJaTGRxVW9PYnBVaVcyVkp2XG5RcmFVS2xiSHVlSkI1MXEzVEcyQ3FwYWV4cXppNVd3TDYyRUx3dG5ZSUhqNW9EZzBNT3ZLc1NjMUhibFZoSDFrXG5qSHU2cW8wdDdFcHpYdmdNYzZrQ3lKa2lMaTlrZUlKdHUzd1FLRW9HWFh2N0o5U3AxU0VCTnJnWXd3S0JnUUNNXG41c0FUcmxRYnZwRy9oWEhwMURhdTZUdmRDam1PYkJNdVR6SGE2N3VqaDYzajNMbjJmaThENUlMekw2bGRqUHBGXG5RRW85RXdDdlkxMzVBc0drTzMrSi9KNFVFbVBoK1NzNEQ0akE4Y0ZCWVcybEs1NSs0L04wYjNaeTZhVUg1aFBmXG5OVisyVWtRSUUzRzNuOTI2dG56NkRwWlRScVcxSHEvYjV1OGVTSnBVb1FLQmdRREg3RUVrdmcvMzkzb3RVM2V0XG5YQ0hmUGhVMWFjTEgyWUIwcDJYMm1tYlpMZitaeFdXVTB0L2xSNWJRUXVzOWl6d1ZoZ1I5aXZubzVxbEJPN2poXG5OdzMxWlRFc3hJWkFXQjdBekpIcEtob2tLbWhlTnR0VDRiaWpZYTJGTGZ2V20vckVtb1JJK29WVUtRVC91K0YwXG5rNEMzSkhDVEVTTUhWK2IzcnI2YUxRWW5lZz09XG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tXG4iLAogICJjbGllbnRfZW1haWwiOiAiY2FsZW5kYXItYm90QHZpcnR1YWwtMjgzNzE1LmlhbS5nc2VydmljZWFjY291bnQuY29tIiwKICAiY2xpZW50X2lkIjogIjExMzA4MTIzMjcyMTk3NjY2NTM4NyIsCiAgImF1dGhfdXJpIjogImh0dHBzOi8vYWNjb3VudHMuZ29vZ2xlLmNvbS9vL29hdXRoMi9hdXRoIiwKICAidG9rZW5fdXJpIjogImh0dHBzOi8vb2F1dGgyLmdvb2dsZWFwaXMuY29tL3Rva2VuIiwKICAiYXV0aF9wcm92aWRlcl94NTA5X2NlcnRfdXJsIjogImh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL29hdXRoMi92MS9jZXJ0cyIsCiAgImNsaWVudF94NTA5X2NlcnRfdXJsIjogImh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL3JvYm90L3YxL21ldGFkYXRhL3g1MDkvY2FsZW5kYXItYm90JTQwdmlydHVhbC0yODM3MTUuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJ1bml2ZXJzZV9kb21haW4iOiAiZ29vZ2xlYXBpcy5jb20iCn0K"
+DEFAULT_CREDENTIALS_B64 = "ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAidmlydHVhbC0yODM3MTUiLAogICJwcml2YXRlX2tleV9pZCI6ICI0OWNmYmVmNGEyOTE2MmI2NWIzZGE0NDVkZWM1NjM4Mjc5NDg2MDQ0IiwKICAicHJpdmF0ZV9rZXkiOiAiLS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tXG5NSUlFdndJQkFEQU5CZ2txaGtpRzl3MEJBUUVGQUFTQ0JLa3dnZ1NsQWdFQUFvSUJBUURQT2NnUXNhd3ZxeVhvXG4xa0hmYytTRFR5d3BpeExtZURRYzNkQ1ArNE9SSERKYTBRQUFSTEs5VnFtLzdzZTlZNHc3ekgyY0s2UjdTcDBKXG5LWTVibS9IUmFiWTdMZ0ozaVZhRkZUTDE5K1NYZUxVdm05TTk5WTh6M3NNb09UUlNiNEcrb00wN1FaWWp0Y2Q5XG5zMjlGaUNPa25PajVKckkwcEthUDBGcjhUdE44bGcxQVJsUWgyV2FXTng4ckZkK1BFT0twOHpYTVBxaU5UNVhwXG5WbU04a2RSMW01dUNCK0F2YmRmc24rS283SGhEbUdnTS9VQWJtOVF6WlBtYjd1TnNIdlg5K0dZRVI4OTNYYy9KXG5Jc3h4L1FFQytmNzRPTmlzV2xSalBxa0pvd1V2eitDeWRXVk1MUkU5cjEyL1N2TjZKcXorNXNiemE1RklxMXhEXG52OENEcmtZdEFnTUJBQUVDZ2dFQUJ5Vmk5TkJyczZrZlFZeEI4VWE1MXAxZ1ZINXJSRzlZdkxZWmZ4MlpSK1BGXG5DTVMwVDA0UEsrQlZNajAxdmg0MHM4czFlYkUzbHRqWDJYMEpYN2RjKzIrOXpRU2xLU0lmVGErUmRsSDZIQThaXG5rRzY3TmlQRnNIQTZJcVQyWFBGamRBTnZrRitPb2VTZTRJTFRqMzVHWEdMYzFkcXp3b1Q3Q1hLUjhLbDNPWkNUXG5OOW0wK3RiWHNXV1NweGZIV25vL3hNSjVJTDRiYTU3bUFuZFBvSU8wZ25YRW5sY0xaV1k4eGVLM0tQdzd6NllYXG5ZUFYzSUg5SURZTXdtektpczFCKytEUzh2Y1UxcHM3WnZubVVnQ0ZwVDdMUlBSVVpLWDNNTTlzakljWGk0NHpCXG44MEVDaGdJREFpSDhJcHEwM1BUMWt6a2VXRXEvQ2R5ZzJtS3lTeSswc1FLQmdRRHRiTVN2aWxDQ3VHb3c3ejRFXG5XNS94YUEzd0dtcFdHVVIyMU81U1h0TGpQa0FLb1hSK2tXS0hNZEFxZXdtSnNNNThjYTJXWm42aEtsODdYZFdYXG5nYWw4SkJFSVlmRzJoNmljbDB4Mkt2dWFaazcvMzBxUVJtQ3dna2JaZU9LM2c4Yk1RcEpVYTM2SkYzQWdZMGhOXG5YTWNQQlJBMFJiQzF6YmI5eGJocldTcWk2d0tCZ1FEZmNDeGQyTTBGWGxZMnAyZXFBc2M2eFg0MGtOY0ZyeUx6XG5iWVJmdVpMZ05OV05zWDNqbXlQOVdJd1c2UldXcjVKTXJWYm5HejNDazhHSjNhektqKzR4dXF4YkZhZTRiTFN2XG5NWFh4ZnZrVTdjSC9qOVNudFdLUkhVNERrWXJEVUl6RXNNNEZxVmZnQ0s3bDJFcE1jSWwzNVNUSCsvMzkyTWlRXG5jZGlXTXVXRlJ3S0JnUUNadGNwY2oySnlUdXhKQkFxVmpiQXQvUnpRN25rYmhyNUJaTGRxVW9PYnBVaVcyVkp2XG5RcmFVS2xiSHVlSkI1MXEzVEcyQ3FwYWV4cXppNVd3TDYyRUx3dG5ZSUhqNW9EZzBNT3ZLc1NjMUhibFZoSDFrXG5qSHU2cW8wdDdFcHpYdmdNYzZrQ3lKa2lMaTlrZUlKdHUzd1FLRW9HWFh2N0o5U3AxU0VCTnJnWXd3S0JnUUNNXG41c0FUcmxRYnZwRy9oWEhwMURhdTZUdmRDam1PYkJNdVR6SGE2N3VqaDYzajNMbjJmaThENUlMekw2bGRqUHBGXG5RRW85RXdDdlkxMzVBc0drTzMrSi9KNFVFbVBoK1NzNEQ0akE4Y0ZCWVcybEs1NSs0L04wYjNaeTZhVUg1aFBmXG5OVisyVWtRSUUzRzNuOTI2dG56NkRwWlRScVcxSHEvYjV1OGVTSnBVb1FLQmdRREg3RUVrdmcvMzkzb3RVM2V0XG5YQ0hmUGhVMWFjTEgyWUIwcDJYMm1tYlpMZitaeFdXVTB0L2xSNWJRUXVzOWl6d1ZoZ1I5aXZubzVxbEJPN2poXG5OdzMxWlRFc3hJWkFXQjdBekpIcEtob2tLbWhlTnR0VDRiaWpZYTJGTGZ2V20vckVtb1JJK29WVUtRVC91K0YwXG5rNEMzSkhDVEVTTUhWK2IzcnI2YUxRWW5lZz09XG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tXG4iLAogICJjbGllbnRfZW1haWwiOiAiY2FsZW5kYXItYm90QHZpcnR1YWwtMjgzNzE1LmlhbS5nc2VydmljZWFjY291bnQuY29tIiwKICAiY2xpZW50X2lkIjogIjExMzA4MTIzMjcyMTk3NjY2NTM4NyIsCiAgImF1dGhfdXJpIjogImh0dHBzOi8vYWNjb3VudHMuZ29vZ2xlLmNvbS9vL29hdXRoMi9hdXRoIiwKICAidG9rZW5fdXJpIjogImh0dHBzOi8vb2F1dGgyLmdvb2dsZWFwaXMuY29tL3Rva2VuIiwKICAiYXV0aF9wcm92aWRlcl94NTA5X2NlcnRfdXJsIjogImh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL29hdXRoMi92MS9jZXJ0cyIsCiAgImNsaWVudF94NTA5X2NlcnRfdXJsIjogImh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL3JvYm90L3YxL21ldGFkYXRhL3g1MDkvY2FsZW5kYXItYm90JTQwdmlydHVhbC0yODM3MTUuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJ1bml2ZXJzZV9kb21haW4iOiAiZ29vZ2xlYXBpcy5jb20iCn0K"
 
 def find_json_credentials() -> str:
     """Scan all environment variables for Service Account JSON or Base64 data."""
@@ -76,7 +76,7 @@ class GoogleCalendarManager:
             raw_str = raw_str.replace('\\\\n', '\n').replace('\\n', '\n')
 
             try:
-                info = json.loads(raw_str)
+                info = json.loads(raw_str, strict=False)
                 credentials = service_account.Credentials.from_service_account_info(
                     info, scopes=SCOPES
                 )
@@ -89,12 +89,15 @@ class GoogleCalendarManager:
         # Fallback to credentials.json file
         cred_path = config.get_credentials_path()
         if cred_path.exists():
-            credentials = service_account.Credentials.from_service_account_file(
-                str(cred_path), scopes=SCOPES
-            )
-            logger.info("Authenticated with Google Calendar API using credentials.json file.")
-            self.service = build('calendar', 'v3', credentials=credentials)
-            return
+            try:
+                credentials = service_account.Credentials.from_service_account_file(
+                    str(cred_path), scopes=SCOPES
+                )
+                logger.info("Authenticated with Google Calendar API using credentials.json file.")
+                self.service = build('calendar', 'v3', credentials=credentials)
+                return
+            except Exception as e:
+                logger.error(f"Error reading credentials file: {e}")
 
         raise FileNotFoundError(
             "Google Service Account Credentials Not Found!"
@@ -108,82 +111,89 @@ class GoogleCalendarManager:
         """Fetch all events scheduled for today."""
         self._ensure_authenticated()
         now = datetime.datetime.now(self.tz)
-        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_of_day = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        end_of_day = now.replace(hour=23, minute=59, second=59, microsecond=999999).isoformat()
 
-        return self._fetch_events(start_of_day, end_of_day)
+        events_result = self.service.events().list(
+            calendarId=config.GOOGLE_CALENDAR_ID,
+            timeMin=start_of_day,
+            timeMax=end_of_day,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+
+        return events_result.get('items', [])
 
     def get_upcoming_events(self, days: int = 7):
         """Fetch upcoming events for the next N days."""
         self._ensure_authenticated()
         now = datetime.datetime.now(self.tz)
-        future = now + datetime.timedelta(days=days)
+        start_time = now.isoformat()
+        end_time = (now + datetime.timedelta(days=days)).isoformat()
 
-        return self._fetch_events(now, future)
+        events_result = self.service.events().list(
+            calendarId=config.GOOGLE_CALENDAR_ID,
+            timeMin=start_time,
+            timeMax=end_time,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+
+        return events_result.get('items', [])
 
     def get_events_starting_between(self, start_dt: datetime.datetime, end_dt: datetime.datetime):
-        """Fetch events that start within a specific time window."""
+        """Fetch events starting between start_dt and end_dt."""
         self._ensure_authenticated()
-        return self._fetch_events(start_dt, end_dt)
+        events_result = self.service.events().list(
+            calendarId=config.GOOGLE_CALENDAR_ID,
+            timeMin=start_dt.isoformat(),
+            timeMax=end_dt.isoformat(),
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
 
-    def _fetch_events(self, time_min: datetime.datetime, time_max: datetime.datetime):
-        """Internal helper to query Google Calendar API for events."""
-        try:
-            time_min_iso = time_min.isoformat()
-            time_max_iso = time_max.isoformat()
-
-            events_result = self.service.events().list(
-                calendarId=config.GOOGLE_CALENDAR_ID,
-                timeMin=time_min_iso,
-                timeMax=time_max_iso,
-                singleEvents=True,
-                orderBy='startTime'
-            ).execute()
-
-            events = events_result.get('items', [])
-            return events
-        except HttpError as error:
-            logger.error(f"An error occurred while querying Google Calendar: {error}")
-            raise error
+        return events_result.get('items', [])
 
     def format_event_message(self, event: dict) -> str:
-        """Format a single event into a clean HTML message for Telegram."""
-        summary = event.get('summary', 'No Title (គ្មានចំណងជើង)')
+        """Format event dictionary into clear Khmer message."""
+        summary = event.get('summary', 'គ្មានចំណងជើង (No Title)')
         description = event.get('description', '')
         location = event.get('location', '')
-        hangout_link = event.get('hangoutLink', '')
-
+        
         start = event.get('start', {})
         end = event.get('end', {})
 
+        time_str = "ពេញមួយថ្ងៃ (All Day)"
+        date_str = ""
+
         if 'dateTime' in start:
             start_dt = datetime.datetime.fromisoformat(start['dateTime']).astimezone(self.tz)
-            end_dt = datetime.datetime.fromisoformat(end['dateTime']).astimezone(self.tz)
-            
             start_period = get_khmer_period(start_dt)
-            end_period = get_khmer_period(end_dt)
+            start_time_fmt = f"{start_dt.strftime('%H:%M')} {start_period}"
             
-            if start_period == end_period:
-                time_str = f"⏰ <b>{start_dt.strftime('%H:%M')} - {end_dt.strftime('%H:%M')} {start_period}</b> ({start_dt.strftime('%d/%m/%Y')})"
+            if 'dateTime' in end:
+                end_dt = datetime.datetime.fromisoformat(end['dateTime']).astimezone(self.tz)
+                end_period = get_khmer_period(end_dt)
+                end_time_fmt = f"{end_dt.strftime('%H:%M')} {end_period}"
+                time_str = f"{start_time_fmt} - {end_time_fmt}"
             else:
-                time_str = f"⏰ <b>{start_dt.strftime('%H:%M')} {start_period} - {end_dt.strftime('%H:%M')} {end_period}</b> ({start_dt.strftime('%d/%m/%Y')})"
-        else:
-            # All-day event
-            time_str = f"📅 <b>ពេញមួយថ្ងៃ ({start.get('date')})</b>"
+                time_str = start_time_fmt
+                
+            date_str = start_dt.strftime("%d/%m/%Y")
+        elif 'date' in start:
+            start_dt = datetime.datetime.strptime(start['date'], "%Y-%m-%d")
+            date_str = start_dt.strftime("%d/%m/%Y")
+            time_str = "ពេញមួយថ្ងៃ (All Day)"
 
-        msg = f"📌 <b>{summary}</b>\n{time_str}\n"
-
+        msg = f"📌 <b>{summary}</b>\n"
+        msg += f"⏰ <b>{time_str}</b> ({date_str})\n"
+        
         if location:
             msg += f"📍 <b>ទីតាំង:</b> {location}\n"
-        else:
-            msg += "📍 <b>ទីតាំង:</b> មិនទាន់បានកំណត់\n"
-
-        if hangout_link:
-            msg += f"📹 <b>Google Meet:</b> <a href='{hangout_link}'>ចុចត្រង់នេះដើម្បីចូលរៀន/ប្រជុំ</a>\n"
-
         if description:
-            # Shorten description if too long
-            desc_text = description[:200] + ('...' if len(description) > 200 else '')
-            msg += f"📝 <b>ពិពណ៌នា:</b> {desc_text}\n"
+            clean_desc = description.strip()
+            if len(clean_desc) > 300:
+                clean_desc = clean_desc[:300] + "..."
+            msg += f"📝 <b>ពិពណ៌នា:</b> {clean_desc}\n"
 
         return msg
