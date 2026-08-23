@@ -22,35 +22,30 @@ def get_main_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-@app.route("/", methods=["GET"])
-@app.route("/api/index.py", methods=["GET"])
-def home():
-    return "OK - Google Calendar Telegram Bot on Vercel is READY!"
+@app.route("/", methods=["GET", "POST"])
+@app.route("/<path:path>", methods=["GET", "POST"])
+def catch_all(path=""):
+    if request.method == "GET":
+        host = request.headers.get("Host", "jingbot.p2bkh.tech")
+        if "set_webhook" in request.path or "set_webhook" in path:
+            webhook_url = f"https://{host}/"
+            from telegram.ext import Application
+            import config
+            
+            async def _set():
+                bot_app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+                await bot_app.initialize()
+                await bot_app.bot.set_webhook(url=webhook_url)
 
-@app.route("/set_webhook", methods=["GET"])
-@app.route("/api/index.py/set_webhook", methods=["GET"])
-def set_webhook():
-    host = request.headers.get("Host", "jingbot.p2bkh.tech")
-    webhook_url = f"https://{host}/"
-    
-    from telegram.ext import Application
-    import config
-    
-    async def _set():
-        bot_app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
-        await bot_app.initialize()
-        await bot_app.bot.set_webhook(url=webhook_url)
+            try:
+                asyncio.run(_set())
+                return f"<h2>✅ Telegram Webhook registered successfully!</h2><p>Webhook URL: <code>{webhook_url}</code></p>"
+            except Exception as e:
+                return f"<h2>❌ Error setting webhook:</h2><p><code>{e}</code></p>", 500
 
-    try:
-        asyncio.run(_set())
-        return f"<h2>✅ Telegram Webhook registered successfully!</h2><p>Webhook URL: <code>{webhook_url}</code></p>"
-    except Exception as e:
-        return f"<h2>❌ Error setting webhook:</h2><p><code>{e}</code></p>", 500
+        return "OK - Google Calendar Telegram Bot is running on Vercel Serverless Function!"
 
-@app.route("/", methods=["POST"])
-@app.route("/api/index.py", methods=["POST"])
-@app.route("/<path:path>", methods=["POST"])
-def webhook(path=None):
+    # POST handling for Telegram Webhook
     from telegram import Update
     from telegram.ext import Application, CommandHandler, MessageHandler, filters
     import config
