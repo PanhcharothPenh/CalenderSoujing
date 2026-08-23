@@ -4,6 +4,8 @@ import json
 import asyncio
 import logging
 import traceback
+import datetime
+import pytz
 from flask import Flask, request, jsonify
 
 # Ensure root project directory is in sys.path
@@ -13,6 +15,9 @@ if BASE_DIR not in sys.path:
 
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
+
+# Global cache to prevent duplicate reminder notifications
+sent_reminders = set()
 
 def get_main_keyboard():
     from telegram import ReplyKeyboardMarkup, KeyboardButton
@@ -28,6 +33,56 @@ def get_main_keyboard():
 def catch_all(path=""):
     if request.method == "GET":
         host = request.headers.get("Host", "jingbot.p2bkh.tech")
+        
+        # Cron endpoint for automated 24/7 background event reminders
+        if "cron" in request.path or "cron" in path:
+            from telegram import Bot
+            import config
+            from google_calendar import GoogleCalendarManager
+
+            bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
+            calendar_mgr = GoogleCalendarManager()
+            subscribers = config.load_subscribers()
+
+            async def process_cron():
+                if not subscribers:
+                    return "No subscribers"
+                tz = pytz.timezone(config.TIMEZONE)
+                now = datetime.datetime.now(tz)
+                window_end = now + datetime.timedelta(minutes=config.REMINDER_MINUTES + 2)
+
+                events = await asyncio.to_thread(calendar_mgr.get_events_starting_between, now, window_end)
+                sent_count = 0
+
+                for event in events:
+                    event_id = event.get('id')
+                    start = event.get('start', {})
+                    if 'dateTime' not in start:
+                        continue
+                    
+                    start_dt = datetime.datetime.fromisoformat(start['dateTime']).astimezone(tz)
+                    time_diff = (start_dt - now).total_seconds() / 60.0
+                    reminder_key = f"{event_id}_{start_dt.isoformat()}"
+
+                    if 0 <= time_diff <= config.REMINDER_MINUTES and reminder_key not in sent_reminders:
+                        event_details = calendar_mgr.format_event_message(event)
+                        msg = f"🔔 <b>[ការជូនដំណឹង] Event ជិតដល់ម៉ោងក្នុងពេល {int(time_diff)} នាទីទៀត!</b>\n\n{event_details}"
+                        for cid in subscribers:
+                            try:
+                                await bot.send_message(chat_id=cid, text=msg, parse_mode="HTML", disable_web_page_preview=True)
+                                sent_count += 1
+                            except Exception as send_err:
+                                logger.error(f"Error sending reminder to {cid}: {send_err}")
+                        sent_reminders.add(reminder_key)
+                return f"Cron executed. Sent {sent_count} reminders."
+
+            try:
+                res_msg = asyncio.run(process_cron())
+                return jsonify({"status": "ok", "message": res_msg})
+            except Exception as e:
+                return jsonify({"status": "error", "message": str(e)}), 500
+
+        # Webhook setup endpoint
         if "set_webhook" in request.path or "set_webhook" in path:
             webhook_url = f"https://{host}/"
             from telegram import Bot
