@@ -23,10 +23,12 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 @app.route("/", methods=["GET"])
+@app.route("/api/index.py", methods=["GET"])
 def home():
     return "OK - Google Calendar Telegram Bot on Vercel is READY!"
 
 @app.route("/set_webhook", methods=["GET"])
+@app.route("/api/index.py/set_webhook", methods=["GET"])
 def set_webhook():
     host = request.headers.get("Host", "jingbot.p2bkh.tech")
     webhook_url = f"https://{host}/"
@@ -46,7 +48,9 @@ def set_webhook():
         return f"<h2>❌ Error setting webhook:</h2><p><code>{e}</code></p>", 500
 
 @app.route("/", methods=["POST"])
-def webhook():
+@app.route("/api/index.py", methods=["POST"])
+@app.route("/<path:path>", methods=["POST"])
+def webhook(path=None):
     from telegram import Update
     from telegram.ext import Application, CommandHandler, MessageHandler, filters
     import config
