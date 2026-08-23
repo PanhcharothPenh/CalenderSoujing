@@ -27,7 +27,7 @@ GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "credenti
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Phnom_Penh")
 REMINDER_MINUTES = int(os.getenv("REMINDER_MINUTES", "15"))
 DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "07:00")
-SUBSCRIBERS_FILE = BASE_DIR / "subscribers.json"
+SUBSCRIBERS_FILE = Path("/tmp/subscribers.json")
 
 def has_inline_json_credentials() -> bool:
     """Check if any environment variable contains Service Account JSON data or Base64 string."""
@@ -104,7 +104,7 @@ def remove_subscriber(chat_id: Union[str, int]) -> bool:
     return False
 
 def _save_subscribers(subscribers: Set[str]):
-    """Internal helper to save subscribers to subscribers.json."""
+    """Internal helper to save subscribers to subscribers.json in /tmp."""
     try:
         with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as f:
             json.dump(sorted(list(subscribers)), f, indent=2)
