@@ -1,16 +1,16 @@
-from http.server import BaseHTTPRequestHandler
-import json
-import asyncio
 import os
 import sys
+import json
+import asyncio
 import logging
-import traceback
+from flask import Flask, request, jsonify
 
 # Ensure root project directory is in sys.path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+app = Flask(__name__)
 logger = logging.getLogger(__name__)
 
 def get_main_keyboard():
@@ -22,62 +22,39 @@ def get_main_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        try:
-            host = self.headers.get('Host', 'jingbot.p2bkh.tech')
-            if 'set_webhook' in self.path:
-                webhook_url = f"https://{host}/"
-                asyncio.run(self._set_webhook_url(webhook_url))
-                self.send_response(200)
-                self.send_header('Content-type', 'text/html; charset=utf-8')
-                self.end_headers()
-                resp = f"<h2>✅ Telegram Webhook registered successfully!</h2><p>Webhook URL: <code>{webhook_url}</code></p>"
-                self.wfile.write(resp.encode('utf-8'))
-                return
+@app.route("/", methods=["GET"])
+def home():
+    return "OK - Google Calendar Telegram Bot on Vercel is READY!"
 
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain; charset=utf-8')
-            self.end_headers()
-            self.wfile.write(b"OK - Google Calendar Telegram Bot is running on Vercel Serverless Function!")
-        except Exception as e:
-            tb = traceback.format_exc()
-            self.send_response(500)
-            self.send_header('Content-type', 'text/plain; charset=utf-8')
-            self.end_headers()
-            err_msg = f"Vercel Exception: {e}\n\nTraceback:\n{tb}"
-            self.wfile.write(err_msg.encode('utf-8'))
+@app.route("/set_webhook", methods=["GET"])
+def set_webhook():
+    host = request.headers.get("Host", "jingbot.p2bkh.tech")
+    webhook_url = f"https://{host}/"
+    
+    from telegram.ext import Application
+    import config
+    
+    async def _set():
+        bot_app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+        await bot_app.bot.set_webhook(url=webhook_url)
 
-    async def _set_webhook_url(self, url: str):
-        from telegram.ext import Application
-        import config
-        app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
-        await app.bot.set_webhook(url=url)
+    try:
+        asyncio.run(_set())
+        return f"<h2>✅ Telegram Webhook registered successfully!</h2><p>Webhook URL: <code>{webhook_url}</code></p>"
+    except Exception as e:
+        return f"<h2>❌ Error setting webhook:</h2><p><code>{e}</code></p>", 500
 
-    def do_POST(self):
-        try:
-            content_length = int(self.headers.get('Content-Length', 0))
-            post_data = self.rfile.read(content_length)
-            
-            update_data = json.loads(post_data.decode('utf-8'))
-            asyncio.run(self._process_update(update_data))
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok"}).encode('utf-8'))
-        except Exception as e:
-            logger.error(f"Error processing Vercel webhook update: {e}")
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+@app.route("/", methods=["POST"])
+def webhook():
+    from telegram import Update
+    from telegram.ext import Application, CommandHandler, MessageHandler, filters
+    import config
+    from google_calendar import GoogleCalendarManager, find_json_credentials
 
-    async def _process_update(self, update_data: dict):
-        from telegram import Update
-        from telegram.ext import Application, CommandHandler, MessageHandler, filters
-        import config
-        from google_calendar import GoogleCalendarManager, find_json_credentials
+    try:
+        update_data = request.get_json(force=True, silent=True) or {}
+        if not update_data:
+            return jsonify({"status": "error", "message": "No JSON payload"}), 400
 
         calendar_mgr = GoogleCalendarManager()
 
@@ -151,16 +128,24 @@ class handler(BaseHTTPRequestHandler):
             elif "ការណែនាំ" in text or "help" in text.lower():
                 await help_cmd(update, context)
 
-        app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
-        app.add_handler(CommandHandler("start", start_cmd))
-        app.add_handler(CommandHandler("stop", stop_cmd))
-        app.add_handler(CommandHandler("unsubscribe", stop_cmd))
-        app.add_handler(CommandHandler("help", help_cmd))
-        app.add_handler(CommandHandler("today", today_cmd))
-        app.add_handler(CommandHandler("upcoming", upcoming_cmd))
-        app.add_handler(CommandHandler("status", status_cmd))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
+        async def _run():
+            bot_app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+            bot_app.add_handler(CommandHandler("start", start_cmd))
+            bot_app.add_handler(CommandHandler("stop", stop_cmd))
+            bot_app.add_handler(CommandHandler("unsubscribe", stop_cmd))
+            bot_app.add_handler(CommandHandler("help", help_cmd))
+            bot_app.add_handler(CommandHandler("today", today_cmd))
+            bot_app.add_handler(CommandHandler("upcoming", upcoming_cmd))
+            bot_app.add_handler(CommandHandler("status", status_cmd))
+            bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
 
-        await app.initialize()
-        update = Update.de_json(update_data, app.bot)
-        await app.process_update(update)
+            await bot_app.initialize()
+            update = Update.de_json(update_data, bot_app.bot)
+            await bot_app.process_update(update)
+
+        asyncio.run(_run())
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        logger.error(f"Error in webhook endpoint: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
