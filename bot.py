@@ -66,13 +66,13 @@ def start_health_server():
         logger.error(f"Error starting health check HTTP server: {e}")
 
 def start_keep_alive():
-    """Background thread to self-ping HTTP server every 5 minutes to keep Render Free Web Service active 24/7."""
+    """Background thread to self-ping HTTP server every 3 minutes to keep Render Free Web Service active 24/7."""
     port = int(os.getenv("PORT", 8080))
     url = f"http://127.0.0.1:{port}/"
     time.sleep(10)  # Wait for initial HTTP server startup
     while True:
         try:
-            time.sleep(300)  # Ping every 5 minutes
+            time.sleep(180)  # Ping every 3 minutes
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=5) as response:
                 pass
@@ -235,23 +235,23 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def handle_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Route Telegram Keyboard Button clicks to corresponding command handlers."""
+    """Flexible matching router for Telegram Keyboard Button clicks."""
     if not update.message or not update.message.text:
         return
 
     text = update.message.text.strip()
     
-    if text == "📅 Event ថ្ងៃនេះ":
+    if "Event ថ្ងៃនេះ" in text or "ថ្ងៃនេះ" in text:
         await today_command(update, context)
-    elif text == "📆 Event ៧ថ្ងៃខាងមុខ":
+    elif "Event ៧ថ្ងៃ" in text or "៧ថ្ងៃ" in text or "ជិតមកដល់" in text:
         await upcoming_command(update, context)
-    elif text == "🔔 ចុះឈ្មោះទទួលសារ":
+    elif "ចុះឈ្មោះទទួលសារ" in text or "ចុះឈ្មោះ" in text:
         await start_command(update, context)
-    elif text == "🔕 លុបការចុះឈ្មោះ":
+    elif "លុបការចុះឈ្មោះ" in text or "លុប" in text:
         await stop_command(update, context)
-    elif text == "📊 ស្ថានភាពប្រព័ន្ធ":
+    elif "ស្ថានភាព" in text or "status" in text.lower():
         await status_command(update, context)
-    elif text == "ℹ️ ការណែនាំ":
+    elif "ការណែនាំ" in text or "help" in text.lower():
         await help_command(update, context)
 
 async def check_upcoming_reminders(bot):
