@@ -3,6 +3,7 @@ import sys
 import json
 import asyncio
 import logging
+import traceback
 from flask import Flask, request, jsonify
 
 # Ensure root project directory is in sys.path
@@ -25,36 +26,36 @@ def get_main_keyboard():
 @app.route("/", methods=["GET", "POST"])
 @app.route("/<path:path>", methods=["GET", "POST"])
 def catch_all(path=""):
-    if request.method == "GET":
-        host = request.headers.get("Host", "jingbot.p2bkh.tech")
-        if "set_webhook" in request.path or "set_webhook" in path:
-            webhook_url = f"https://{host}/"
-            from telegram.ext import Application
-            import config
-            
-            async def _set():
-                bot_app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
-                await bot_app.initialize()
-                await bot_app.bot.set_webhook(url=webhook_url)
-
-            try:
-                asyncio.run(_set())
-                return f"<h2>✅ Telegram Webhook registered successfully!</h2><p>Webhook URL: <code>{webhook_url}</code></p>"
-            except Exception as e:
-                return f"<h2>❌ Error setting webhook:</h2><p><code>{e}</code></p>", 500
-
-        return "OK - Google Calendar Telegram Bot is running on Vercel Serverless Function!"
-
-    # POST handling for Telegram Webhook
-    from telegram import Update
-    from telegram.ext import Application, CommandHandler, MessageHandler, filters
-    import config
-    from google_calendar import GoogleCalendarManager, find_json_credentials
-
     try:
+        if request.method == "GET":
+            host = request.headers.get("Host", "jingbot.p2bkh.tech")
+            if "set_webhook" in request.path or "set_webhook" in path:
+                webhook_url = f"https://{host}/"
+                from telegram.ext import Application
+                import config
+                
+                async def _set():
+                    bot_app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+                    await bot_app.initialize()
+                    await bot_app.bot.set_webhook(url=webhook_url)
+
+                try:
+                    asyncio.run(_set())
+                    return f"<h2>✅ Telegram Webhook registered successfully!</h2><p>Webhook URL: <code>{webhook_url}</code></p>"
+                except Exception as e:
+                    return f"<h2>❌ Error setting webhook:</h2><p><code>{e}</code></p>", 500
+
+            return "OK - Google Calendar Telegram Bot is running on Vercel Serverless Function!"
+
+        # POST handling for Telegram Webhook
+        from telegram import Update
+        from telegram.ext import Application, CommandHandler, MessageHandler, filters
+        import config
+        from google_calendar import GoogleCalendarManager, find_json_credentials
+
         update_data = request.get_json(force=True, silent=True) or {}
         if not update_data:
-            return jsonify({"status": "error", "message": "No JSON payload"}), 400
+            return jsonify({"status": "ok", "message": "No JSON payload"}), 200
 
         calendar_mgr = GoogleCalendarManager()
 
@@ -150,5 +151,6 @@ def catch_all(path=""):
         return jsonify({"status": "ok"})
 
     except Exception as e:
-        logger.error(f"Error in webhook endpoint: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        tb = traceback.format_exc()
+        logger.error(f"Error in webhook endpoint: {e}\n{tb}")
+        return jsonify({"status": "error", "message": str(e), "traceback": tb}), 200
