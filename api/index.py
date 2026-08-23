@@ -144,6 +144,7 @@ def catch_all(path=""):
             await bot_app.start()
             update = Update.de_json(update_data, bot_app.bot)
             await bot_app.process_update(update)
+            await asyncio.sleep(1.5)  # Allow event dispatcher window to complete command & reply to Telegram
             await bot_app.stop()
             await bot_app.shutdown()
 
