@@ -20,13 +20,16 @@ BASE_DIR = Path(__file__).resolve().parent
 # Load environment variables from .env file
 load_dotenv(BASE_DIR / ".env")
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8624526881:AAH7RFxUm0ByjiINRhGXRNnx7CDlrjbmsDs")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "7818150707")
-GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "67d11dbc36e8dbf76f3f3332aa3d0d798a6bfc8f632088201e3e418bee1ba55d@group.calendar.google.com")
-GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "credentials.json")
-TIMEZONE = os.getenv("TIMEZONE", "Asia/Phnom_Penh")
-REMINDER_MINUTES = int(os.getenv("REMINDER_MINUTES", "15"))
-DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "07:00")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip() or "8624526881:AAH7RFxUm0ByjiINRhGXRNnx7CDlrjbmsDs"
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip() or "7818150707"
+GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "").strip() or "67d11dbc36e8dbf76f3f3332aa3d0d798a6bfc8f632088201e3e418bee1ba55d@group.calendar.google.com"
+GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "credentials.json").strip() or "credentials.json"
+TIMEZONE = os.getenv("TIMEZONE", "").strip() or "Asia/Phnom_Penh"
+
+raw_rem = os.getenv("REMINDER_MINUTES", "15").strip()
+REMINDER_MINUTES = int(raw_rem) if raw_rem.isdigit() else 15
+
+DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "").strip() or "07:00"
 SUBSCRIBERS_FILE = Path("/tmp/subscribers.json")
 
 def has_inline_json_credentials() -> bool:
@@ -63,7 +66,7 @@ def get_credentials_path() -> Path:
 
 def get_env_chat_ids() -> List[str]:
     """Parse TELEGRAM_CHAT_ID from env with fallback to 7818150707."""
-    raw = os.getenv("TELEGRAM_CHAT_ID", "7818150707")
+    raw = os.getenv("TELEGRAM_CHAT_ID", "").strip() or "7818150707"
     if not raw or raw == "your_telegram_chat_id_here":
         return ["7818150707"]
     return [cid.strip() for cid in raw.split(",") if cid.strip()]
