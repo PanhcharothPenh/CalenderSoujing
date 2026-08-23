@@ -36,6 +36,7 @@ def set_webhook():
     
     async def _set():
         bot_app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+        await bot_app.initialize()
         await bot_app.bot.set_webhook(url=webhook_url)
 
     try:
@@ -140,8 +141,11 @@ def webhook():
             bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
 
             await bot_app.initialize()
+            await bot_app.start()
             update = Update.de_json(update_data, bot_app.bot)
             await bot_app.process_update(update)
+            await bot_app.stop()
+            await bot_app.shutdown()
 
         asyncio.run(_run())
         return jsonify({"status": "ok"})
