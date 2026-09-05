@@ -32,6 +32,11 @@ REMINDER_MINUTES = int(raw_rem) if raw_rem.isdigit() else 15
 DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "").strip() or "07:00"
 SUBSCRIBERS_FILE = Path("/tmp/subscribers.json")
 
+# ProTrack365 GPS Integration
+PROTRACK_ACCOUNT = os.getenv("PROTRACK_ACCOUNT", "").strip()
+PROTRACK_PASSWORD = os.getenv("PROTRACK_PASSWORD", "").strip()
+PROTRACK_IMEI = os.getenv("PROTRACK_IMEI", "").strip()
+
 def has_inline_json_credentials() -> bool:
     """Check if any environment variable contains Service Account JSON data or Base64 string."""
     for key, val in os.environ.items():
