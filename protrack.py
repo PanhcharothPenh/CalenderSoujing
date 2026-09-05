@@ -167,7 +167,7 @@ class ProTrackClient:
         maps_url = loc_data.get('maps_url', f"https://www.google.com/maps?q={lat},{lng}")
 
         msg = (
-            f"🚗 <b>ទីតាំងយានយន្តបច្ចុប្បន្ន ({dev_name}):</b>\n\n"
+            f"🏍️ <b>ទីតាំងម៉ូតូបច្ចុប្បន្ន ({dev_name}):</b>\n\n"
             f"• 📍 <b>កូអរដោនេ:</b> <code>{lat}, {lng}</code>\n"
             f"• 🚀 <b>ល្បឿន:</b> {speed} km/h\n"
             f"• 📶 <b>ស្ថានភាព:</b> {status}\n"

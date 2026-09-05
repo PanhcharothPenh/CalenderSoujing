@@ -23,7 +23,7 @@ def get_main_keyboard():
     from telegram import ReplyKeyboardMarkup, KeyboardButton
     keyboard = [
         [KeyboardButton("📅 Event ថ្ងៃនេះ"), KeyboardButton("📆 Event ៧ថ្ងៃខាងមុខ")],
-        [KeyboardButton("🚗 ទីតាំងយានយន្ត"), KeyboardButton("📊 ស្ថានភាពប្រព័ន្ធ")],
+        [KeyboardButton("🏍️ ទីតាំងម៉ូតូ"), KeyboardButton("📊 ស្ថានភាពប្រព័ន្ធ")],
         [KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ"), KeyboardButton("🔕 លុបការចុះឈ្មោះ")],
         [KeyboardButton("ℹ️ ការណែនាំ")]
     ]
@@ -187,7 +187,7 @@ def catch_all(path=""):
                         reply_markup=reply_markup
                     )
 
-            elif "ទីតាំង" in text or "track" in text.lower() or text == "/track":
+            elif "ទីតាំង" in text or "ម៉ូតូ" in text or "ឡាន" in text or "track" in text.lower() or text == "/track":
                 parts = text.split()
                 target_imei = parts[1].strip() if len(parts) > 1 and parts[1].isdigit() else None
                 loc_data = await asyncio.to_thread(protrack.get_device_location, target_imei)
