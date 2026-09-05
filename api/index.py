@@ -40,9 +40,11 @@ def catch_all(path=""):
             from telegram import Bot
             import config
             from google_calendar import GoogleCalendarManager
+            from protrack import ProTrackClient
 
             bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
             calendar_mgr = GoogleCalendarManager()
+            protrack = ProTrackClient()
             subscribers = config.load_subscribers()
 
             async def process_cron():
@@ -175,14 +177,14 @@ def catch_all(path=""):
                     protrack.save_imei(new_imei)
                     await bot.send_message(
                         chat_id=chat_id,
-                        text=f"✅ <b>បានកំណត់លេខ IMEI រួចរាល់:</b> <code>{new_imei}</code>\n\nសូមចុចប៊ូតុង 🚗 ទីតាំងយានយន្ត ដើម្បីពិនិត្យទីតាំង។",
+                        text=f"✅ <b>បានកំណត់លេខ IMEI រួចរាល់:</b> <code>{new_imei}</code>\n\nសូមចុចប៊ូតុង 🏍️ ទីតាំងម៉ូតូ ដើម្បីពិនិត្យទីតាំង។",
                         parse_mode="HTML",
                         reply_markup=reply_markup
                     )
                 else:
                     await bot.send_message(
                         chat_id=chat_id,
-                        text="👉 <b>របៀបកំណត់ IMEI:</b>\n<code>/set_imei <លេខ IMEI 15ខ្ទង់></code>\n(ឧទាហរណ៍៖ <code>/set_imei 868340051234567</code>)",
+                        text="👉 <b>របៀបកំណត់ IMEI:</b>\n<code>/set_imei <លេខ IMEI 15ខ្ទង់></code>\n(ឧទាហរណ៍៖ <code>/set_imei 355139086529317</code>)",
                         parse_mode="HTML",
                         reply_markup=reply_markup
                     )
@@ -208,7 +210,7 @@ def catch_all(path=""):
                 status_msg = (
                     "✅ <b>ប្រព័ន្ធដំណើរការជាប្រក្រតី! (Vercel Serverless OK)</b>\n\n"
                     "• 🔑 <b>Google Credentials:</b> " + ("ភ្ជាប់រួចរាល់ (Connected ✅)" if has_json else "មិនទាន់បានភ្ជាប់ ❌") + "\n"
-                    "• 🚗 <b>ProTrack365 GPS:</b> " + ("ភ្ជាប់រួចរាល់ (Connected ✅)" if has_protrack else "មិនទាន់កំណត់ (Not Configured ⚠️)") + "\n"
+                    "• 🏍️ <b>ProTrack365 GPS:</b> " + ("ភ្ជាប់រួចរាល់ (Connected ✅)" if has_protrack else "មិនទាន់កំណត់ (Not Configured ⚠️)") + "\n"
                     f"• 📅 <b>Calendar ID:</b> <code>{config.GOOGLE_CALENDAR_ID}</code>\n"
                     f"• ⏰ <b>Timezone:</b> {config.TIMEZONE}\n"
                     f"• 👥 <b>អ្នកចុះឈ្មោះទទួលសារ ({len(subscribers)}):</b> <code>{', '.join(subscribers) if subscribers else 'គ្មាន'}</code>\n"
@@ -254,7 +256,7 @@ def catch_all(path=""):
                     "ℹ️ <b>ការណែនាំប្រើប្រាស់ Bot (Google Calendar & ProTrack365):</b>\n\n"
                     "• 📅 Event ថ្ងៃនេះ - បង្ហាញកាលវិភាគថ្ងៃនេះ\n"
                     "• 📆 Event ៧ថ្ងៃខាងមុខ - បង្ហាញកាលវិភាគ ៧ថ្ងៃ\n"
-                    "• 🚗 ទីតាំងយានយន្ត - ពិនិត្យទីតាំង GPS និងល្បឿនឡាន/ម៉ូតូ (ProTrack365)\n"
+                    "• 🏍️ ទីតាំងម៉ូតូ - ពិនិត្យទីតាំង GPS និងស្ថានភាពម៉ាស៊ីន (Engine ON/OFF)\n"
                     "• 📊 ស្ថានភាពប្រព័ន្ធ - ពិនិត្យស្ថានភាព Bot\n"
                 )
                 await bot.send_message(

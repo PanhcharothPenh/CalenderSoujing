@@ -92,7 +92,9 @@ class ProTrackClient:
                 "lat": 11.574509,
                 "lng": 104.861225,
                 "speed": 0,
-                "status": "Static",
+                "engine_status": "ពន្លត់ (OFF 🔴)",
+                "acc": 0,
+                "status": "Static (ចតស្ងៀម)",
                 "time": datetime.datetime.now(pytz.timezone(config.TIMEZONE)).strftime('%d/%m/%Y %H:%M:%S'),
                 "maps_url": f"https://www.google.com/maps?q=11.574509,104.861225"
             }
@@ -117,7 +119,15 @@ class ProTrackClient:
                     lng = device.get('lng', 104.861225)
                     speed = device.get('speed', 0)
                     device_name = device.get('device_name') or device.get('car_plate') or 'PP 1KT-6565'
-                    status = device.get('status_desc') or device.get('status', 'Static')
+                    status_raw = device.get('status_desc') or device.get('status', 'Static')
+                    
+                    # ACC / Engine status parsing
+                    acc_val = device.get('acc', 0)
+                    if acc_val == 1 or acc_val == '1' or acc_val is True:
+                        engine_status = "បើក / បញ្ឆេះ (ON 🟢)"
+                    else:
+                        engine_status = "ពន្លត់ (OFF 🔴)"
+
                     server_time = device.get('server_time') or device.get('rcv_time') or device.get('heart_time') or 0
 
                     tz = pytz.timezone(config.TIMEZONE)
@@ -135,7 +145,9 @@ class ProTrackClient:
                         "lat": lat,
                         "lng": lng,
                         "speed": speed,
-                        "status": status,
+                        "acc": acc_val,
+                        "engine_status": engine_status,
+                        "status": status_raw,
                         "time": time_fmt,
                         "maps_url": google_maps_url
                     }
@@ -143,7 +155,7 @@ class ProTrackClient:
                 logger.error(f"ProTrack Track Attempt {attempt+1} Error: {e}")
                 time.sleep(1)
 
-        # Fallback to last known position
+        # Fallback
         tz = pytz.timezone(config.TIMEZONE)
         return {
             "device_name": "PP 1KT-6565",
@@ -151,6 +163,8 @@ class ProTrackClient:
             "lat": 11.574509,
             "lng": 104.861225,
             "speed": 0,
+            "acc": 0,
+            "engine_status": "ពន្លត់ (OFF 🔴)",
             "status": "Static",
             "time": datetime.datetime.now(tz).strftime('%d/%m/%Y %H:%M:%S'),
             "maps_url": f"https://www.google.com/maps?q=11.574509,104.861225"
@@ -162,12 +176,14 @@ class ProTrackClient:
         lat = loc_data.get('lat', 11.574509)
         lng = loc_data.get('lng', 104.861225)
         speed = loc_data.get('speed', 0)
+        engine_str = loc_data.get('engine_status', 'ពន្លត់ (OFF 🔴)')
         status = loc_data.get('status', 'Static')
         time_str = loc_data.get('time', '')
         maps_url = loc_data.get('maps_url', f"https://www.google.com/maps?q={lat},{lng}")
 
         msg = (
             f"🏍️ <b>ទីតាំងម៉ូតូបច្ចុប្បន្ន ({dev_name}):</b>\n\n"
+            f"• 🔑 <b>ម៉ាស៊ីន (Engine):</b> {engine_str}\n"
             f"• 📍 <b>កូអរដោនេ:</b> <code>{lat}, {lng}</code>\n"
             f"• 🚀 <b>ល្បឿន:</b> {speed} km/h\n"
             f"• 📶 <b>ស្ថានភាព:</b> {status}\n"
