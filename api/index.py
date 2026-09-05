@@ -168,8 +168,29 @@ def catch_all(path=""):
                         reply_markup=reply_markup
                     )
 
+            elif text.startswith("/set_imei") or text.startswith("/imei"):
+                parts = text.split()
+                if len(parts) > 1:
+                    new_imei = parts[1].strip()
+                    protrack.save_imei(new_imei)
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=f"✅ <b>បានកំណត់លេខ IMEI រួចរាល់:</b> <code>{new_imei}</code>\n\nសូមចុចប៊ូតុង 🚗 ទីតាំងយានយន្ត ដើម្បីពិនិត្យទីតាំង។",
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
+                    )
+                else:
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text="👉 <b>របៀបកំណត់ IMEI:</b>\n<code>/set_imei <លេខ IMEI 15ខ្ទង់></code>\n(ឧទាហរណ៍៖ <code>/set_imei 868340051234567</code>)",
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
+                    )
+
             elif "ទីតាំង" in text or "track" in text.lower() or text == "/track":
-                loc_data = await asyncio.to_thread(protrack.get_device_location)
+                parts = text.split()
+                target_imei = parts[1].strip() if len(parts) > 1 and parts[1].isdigit() else None
+                loc_data = await asyncio.to_thread(protrack.get_device_location, target_imei)
                 loc_msg = protrack.format_location_message(loc_data)
                 await bot.send_message(
                     chat_id=chat_id,
