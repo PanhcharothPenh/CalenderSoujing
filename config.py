@@ -33,9 +33,9 @@ DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "").strip() or "07:00"
 SUBSCRIBERS_FILE = Path("/tmp/subscribers.json")
 
 # ProTrack365 GPS Integration
-PROTRACK_ACCOUNT = os.getenv("PROTRACK_ACCOUNT", "").strip()
-PROTRACK_PASSWORD = os.getenv("PROTRACK_PASSWORD", "").strip()
-PROTRACK_IMEI = os.getenv("PROTRACK_IMEI", "").strip()
+PROTRACK_ACCOUNT = os.getenv("PROTRACK_ACCOUNT", "").strip() or "355139086529317"
+PROTRACK_PASSWORD = os.getenv("PROTRACK_PASSWORD", "").strip() or "123456"
+PROTRACK_IMEI = os.getenv("PROTRACK_IMEI", "").strip() or "355139086529317"
 
 def has_inline_json_credentials() -> bool:
     """Check if any environment variable contains Service Account JSON data or Base64 string."""
