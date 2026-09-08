@@ -260,11 +260,7 @@ async def check_upcoming_reminders(bot):
             # Send reminder if start time is within [0, REMINDER_MINUTES]
             reminder_key = f"{event_id}_{start_dt.isoformat()}"
             if 0 <= time_diff <= config.REMINDER_MINUTES and reminder_key not in sent_reminders:
-                event_details = calendar_mgr.format_event_message(event)
-                msg = (
-                    f"🔔 <b>[ការជូនដំណឹង] Event ជិតដល់ម៉ោងក្នុងពេល {int(time_diff)} នាទីទៀត!</b>\n\n"
-                    f"{event_details}"
-                )
+                msg = calendar_mgr.format_reminder_notification(event, int(round(time_diff)))
                 
                 # Send to all registered subscribers
                 for chat_id in subscribers:

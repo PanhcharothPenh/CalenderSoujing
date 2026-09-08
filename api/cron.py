@@ -85,12 +85,8 @@ def run_cron():
             if alert_type:
                 reminder_key = f"{event_id}_{start_dt.isoformat()}_{alert_type}"
                 if reminder_key not in sent_cache:
-                    event_details = calendar_mgr.format_event_message(event)
                     diff_mins = int(round(time_diff))
-                    msg = (
-                        f"🔔 <b>[ការជូនដំណឹង] Event ជិតដល់ម៉ោងក្នុងពេល {diff_mins} នាទីទៀត!</b>\n\n"
-                        f"{event_details}"
-                    )
+                    msg = calendar_mgr.format_reminder_notification(event, diff_mins)
 
                     for cid in subscribers:
                         try:
@@ -114,12 +110,7 @@ def run_cron():
         if current_time_str == config.DAILY_SUMMARY_TIME and daily_key not in sent_cache:
             today_events = await asyncio.to_thread(calendar_mgr.get_today_events)
             today_str = now.strftime('%d/%m/%Y')
-            if not today_events:
-                msg = f"☀️ <b>អរុណសួស្តី! ({today_str})</b>\n\n📅 ថ្ងៃនេះគ្មាន Event រៀបចំទុកទេ! រីករាយថ្ងៃថ្មី!"
-            else:
-                msg = f"☀️ <b>អរុណសួស្តី! នេះជា Event ទាំងអស់សម្រាប់ថ្ងៃនេះ ({today_str}):</b>\n\n"
-                for idx, ev in enumerate(today_events, 1):
-                    msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(ev)}\n"
+            msg = calendar_mgr.format_daily_schedule(today_events, today_str)
 
             for cid in subscribers:
                 try:

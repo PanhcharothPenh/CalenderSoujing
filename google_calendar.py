@@ -314,3 +314,37 @@ class GoogleCalendarManager:
             blocks.append("\n".join(lines))
 
         return header + "\n" + "\n\n".join(blocks)
+
+    def format_reminder_notification(self, event: dict, diff_mins: int) -> str:
+        """Format event reminder notification according to student schedule template."""
+        summary = event.get('summary', 'គ្មានចំណងជើង')
+        clean_summary = summary.replace('_', ' — ') if '_' in summary else summary
+
+        start = event.get('start', {})
+        end = event.get('end', {})
+        time_str = ""
+        if 'dateTime' in start:
+            s_dt = datetime.datetime.fromisoformat(start['dateTime']).astimezone(self.tz)
+            s_t = s_dt.strftime("%H:%M")
+            if 'dateTime' in end:
+                e_dt = datetime.datetime.fromisoformat(end['dateTime']).astimezone(self.tz)
+                e_t = e_dt.strftime("%H:%M")
+                time_str = f"{s_t} – {e_t}"
+            else:
+                time_str = s_t
+        elif 'date' in start:
+            time_str = "ពេញមួយថ្ងៃ"
+        else:
+            time_str = "មិនកំណត់ម៉ោង"
+
+        loc = event.get('location', '')
+        loc_str = self.clean_location_title(loc)
+
+        return (
+            f"🔔 <b>រំលឹកកាលវិភាគ</b>\n\n"
+            f"⏳ នៅសល់ {diff_mins} នាទីទៀត\n\n"
+            f"📚 {clean_summary}\n"
+            f"🕝 {time_str}\n"
+            f"{loc_str}\n\n"
+            f"💡 ត្រៀមខ្លួនឱ្យរួចរាល់ និងទៅឱ្យទាន់ម៉ោង!"
+        )

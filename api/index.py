@@ -87,9 +87,8 @@ def catch_all(path=""):
                     if alert_type:
                         reminder_key = f"{event_id}_{start_dt.isoformat()}_{alert_type}"
                         if reminder_key not in sent_reminders:
-                            event_details = calendar_mgr.format_event_message(event)
                             diff_mins = int(round(time_diff))
-                            msg = f"🔔 <b>[ការជូនដំណឹង] Event ជិតដល់ម៉ោងក្នុងពេល {diff_mins} នាទីទៀត!</b>\n\n{event_details}"
+                            msg = calendar_mgr.format_reminder_notification(event, diff_mins)
                             for cid in subscribers:
                                 try:
                                     await bot.send_message(chat_id=cid, text=msg, parse_mode="HTML", disable_web_page_preview=True)
