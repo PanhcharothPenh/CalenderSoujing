@@ -145,18 +145,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /today command."""
     try:
         events = calendar_mgr.get_today_events()
-        if not events:
-            await update.message.reply_text(
-                "📅 <b>គ្មាន Event សម្រាប់ថ្ងៃនេះទេ!</b>",
-                parse_mode="HTML",
-                reply_markup=get_main_keyboard()
-            )
-            return
-
-        msg = f"☀️ <b>Event ទាំងអស់សម្រាប់ថ្ងៃនេះ ({len(events)} Event):</b>\n\n"
-        for idx, event in enumerate(events, 1):
-            msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
-
+        msg = calendar_mgr.format_daily_schedule(events)
         await update.message.reply_text(
             msg,
             parse_mode="HTML",
@@ -175,18 +164,7 @@ async def upcoming_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /upcoming command."""
     try:
         events = calendar_mgr.get_upcoming_events(days=7)
-        if not events:
-            await update.message.reply_text(
-                "📅 <b>គ្មាន Event ក្នុងរយៈពេល ៧ ថ្ងៃខាងមុខទេ!</b>",
-                parse_mode="HTML",
-                reply_markup=get_main_keyboard()
-            )
-            return
-
-        msg = f"📆 <b>Event ក្នុងរយៈពេល ៧ ថ្ងៃខាងមុខ ({len(events)} Event):</b>\n\n"
-        for idx, event in enumerate(events, 1):
-            msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
-
+        msg = calendar_mgr.format_upcoming_schedule(events)
         await update.message.reply_text(
             msg,
             parse_mode="HTML",
@@ -316,13 +294,7 @@ async def send_daily_summary(bot):
         events = calendar_mgr.get_today_events()
         tz = pytz.timezone(config.TIMEZONE)
         today_str = datetime.datetime.now(tz).strftime('%d/%m/%Y')
-
-        if not events:
-            msg = f"☀️ <b>អរុណសួស្តី! ({today_str})</b>\n\n📅 ថ្ងៃនេះគ្មាន Event រៀបចំទុកទេ! រីករាយថ្ងៃថ្មី!"
-        else:
-            msg = f"☀️ <b>អរុណសួស្តី! នេះជា Event ទាំងអស់សម្រាប់ថ្ងៃនេះ ({today_str}):</b>\n\n"
-            for idx, event in enumerate(events, 1):
-                msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
+        msg = calendar_mgr.format_daily_schedule(events, today_str)
 
         for chat_id in subscribers:
             try:

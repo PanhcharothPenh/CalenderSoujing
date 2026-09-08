@@ -201,3 +201,116 @@ class GoogleCalendarManager:
             msg += f"📝 <b>ពិពណ៌នា:</b> {clean_desc}\n"
 
         return msg
+
+    def clean_location_title(self, raw_loc: str) -> str:
+        """Convert long Google Calendar location string into a clean short header."""
+        if not raw_loc:
+            return "📌 <b>ទូទៅ (General)</b>"
+        low = raw_loc.lower()
+        if "ais" in low or "american intercon" in low:
+            if "sen sok" in low or "ss" in low:
+                return "🏫 <b>AIS Sen Sok</b>"
+            return "🏫 <b>American Intercon School (AIS)</b>"
+        if "rodwell" in low:
+            return "📍 <b>Rodwell Learning Center</b>"
+        
+        c = raw_loc.split(',')[0].split(' - ')[0].strip()
+        icon = "🏫" if any(w in low for w in ["school", "សាលា", "campus", "academy", "university"]) else "📍"
+        return f"{icon} <b>{c}</b>"
+
+    def format_daily_schedule(self, events: list, date_str: str = None) -> str:
+        """Format events of a day into structured Khmer study schedule."""
+        if not events:
+            return "📅 <b>គ្មាន Event សម្រាប់ថ្ងៃនេះទេ!</b>"
+
+        now = datetime.datetime.now(self.tz)
+        if not date_str:
+            date_str = now.strftime("%d/%m/%Y")
+
+        count = len(events)
+        header = f"☀️ <b>កាលវិភាគសិក្សាថ្ងៃនេះ</b>\n📅 {date_str} | 📚 សរុប {count} មុខវិជ្ជា\n"
+
+        groups = {}
+        for ev in events:
+            k = self.clean_location_title(ev.get('location', ''))
+            groups.setdefault(k, []).append(ev)
+
+        body = []
+        for loc_title, ev_list in groups.items():
+            lines = [loc_title]
+            for ev in ev_list:
+                summary = ev.get('summary', 'គ្មានចំណងជើង').replace('_', ' ')
+                start = ev.get('start', {})
+                end = ev.get('end', {})
+
+                if 'dateTime' in start:
+                    s_dt = datetime.datetime.fromisoformat(start['dateTime']).astimezone(self.tz)
+                    s_t = s_dt.strftime("%H:%M")
+                    if 'dateTime' in end:
+                        e_dt = datetime.datetime.fromisoformat(end['dateTime']).astimezone(self.tz)
+                        e_t = e_dt.strftime("%H:%M")
+                        t_str = f"{s_t} – {e_t}"
+                    else:
+                        t_str = s_t
+                elif 'date' in start:
+                    t_str = "ពេញមួយថ្ងៃ"
+                else:
+                    t_str = "មិនកំណត់ម៉ោង"
+
+                lines.append(f"{t_str}  • {summary}")
+            body.append("\n".join(lines))
+
+        footer = "🔔 <b>កុំភ្លេចត្រៀមសម្ភារៈ និងទៅឱ្យទាន់ម៉ោង។</b>"
+        return header + "\n" + "\n\n".join(body) + "\n\n" + footer
+
+    def format_upcoming_schedule(self, events: list) -> str:
+        """Format upcoming 7 days events into grouped dates and locations."""
+        if not events:
+            return "📅 <b>គ្មាន Event ក្នុងរយៈពេល ៧ ថ្ងៃខាងមុខទេ!</b>"
+
+        khmer_days = {
+            'Monday': 'ថ្ងៃចន្ទ', 'Tuesday': 'ថ្ងៃអង្គារ', 'Wednesday': 'ថ្ងៃពុធ',
+            'Thursday': 'ថ្ងៃព្រហស្បតិ៍', 'Friday': 'ថ្ងៃសុក្រ', 'Saturday': 'ថ្ងៃសៅរ៍',
+            'Sunday': 'ថ្ងៃអាទិត្យ'
+        }
+
+        days = {}
+        for ev in events:
+            start = ev.get('start', {})
+            if 'dateTime' in start:
+                dt = datetime.datetime.fromisoformat(start['dateTime']).astimezone(self.tz)
+                d_key = dt.strftime('%Y-%m-%d')
+                day_name = khmer_days.get(dt.strftime('%A'), dt.strftime('%A'))
+                display_d = f"{day_name} ({dt.strftime('%d/%m/%Y')})"
+            elif 'date' in start:
+                dt = datetime.datetime.strptime(start['date'], '%Y-%m-%d')
+                d_key = start['date']
+                day_name = khmer_days.get(dt.strftime('%A'), dt.strftime('%A'))
+                display_d = f"{day_name} ({dt.strftime('%d/%m/%Y')})"
+            else:
+                continue
+            days.setdefault((d_key, display_d), []).append(ev)
+
+        header = f"📆 <b>កាលវិភាគ ៧ ថ្ងៃខាងមុខ (សរុប {len(events)} មុខវិជ្ជា):</b>\n"
+        blocks = []
+        for (d_key, display_d), ev_list in sorted(days.items()):
+            lines = [f"🗓️ <b>{display_d}</b>"]
+            groups = {}
+            for ev in ev_list:
+                groups.setdefault(self.clean_location_title(ev.get('location', '')), []).append(ev)
+            for loc_title, el in groups.items():
+                lines.append(loc_title)
+                for e in el:
+                    s = e.get('summary', 'គ្មានចំណងជើង').replace('_', ' ')
+                    start = e.get('start', {})
+                    end = e.get('end', {})
+                    if 'dateTime' in start:
+                        st = datetime.datetime.fromisoformat(start['dateTime']).astimezone(self.tz).strftime('%H:%M')
+                        et = datetime.datetime.fromisoformat(end['dateTime']).astimezone(self.tz).strftime('%H:%M') if 'dateTime' in end else ''
+                        t = f"{st} – {et}" if et else st
+                    else:
+                        t = "ពេញមួយថ្ងៃ"
+                    lines.append(f"{t}  • {s}")
+            blocks.append("\n".join(lines))
+
+        return header + "\n" + "\n\n".join(blocks)

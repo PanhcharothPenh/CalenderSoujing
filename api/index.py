@@ -104,12 +104,7 @@ def catch_all(path=""):
                 if current_time_str == config.DAILY_SUMMARY_TIME and daily_key not in sent_reminders:
                     today_events = await asyncio.to_thread(calendar_mgr.get_today_events)
                     today_str = now.strftime('%d/%m/%Y')
-                    if not today_events:
-                        msg = f"☀️ <b>អរុណសួស្តី! ({today_str})</b>\n\n📅 ថ្ងៃនេះគ្មាន Event រៀបចំទុកទេ! រីករាយថ្ងៃថ្មី!"
-                    else:
-                        msg = f"☀️ <b>អរុណសួស្តី! នេះជា Event ទាំងអស់សម្រាប់ថ្ងៃនេះ ({today_str}):</b>\n\n"
-                        for idx, ev in enumerate(today_events, 1):
-                            msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(ev)}\n"
+                    msg = calendar_mgr.format_daily_schedule(today_events, today_str)
 
                     for cid in subscribers:
                         try:
@@ -176,45 +171,25 @@ def catch_all(path=""):
 
             if "Event ថ្ងៃនេះ" in text or "ថ្ងៃនេះ" in text or text == "/today":
                 events = await asyncio.to_thread(calendar_mgr.get_today_events)
-                if not events:
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text="📅 <b>គ្មាន Event សម្រាប់ថ្ងៃនេះទេ!</b>",
-                        parse_mode="HTML",
-                        reply_markup=reply_markup
-                    )
-                else:
-                    msg = f"☀️ <b>Event ទាំងអស់សម្រាប់ថ្ងៃនេះ ({len(events)} Event):</b>\n\n"
-                    for idx, event in enumerate(events, 1):
-                        msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=msg,
-                        parse_mode="HTML",
-                        disable_web_page_preview=True,
-                        reply_markup=reply_markup
-                    )
+                msg = calendar_mgr.format_daily_schedule(events)
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=msg,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                    reply_markup=reply_markup
+                )
 
             elif "Event ៧ថ្ងៃ" in text or "៧ថ្ងៃ" in text or "ជិតមកដល់" in text or text == "/upcoming":
                 events = await asyncio.to_thread(calendar_mgr.get_upcoming_events, 7)
-                if not events:
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text="📅 <b>គ្មាន Event ក្នុងរយៈពេល ៧ ថ្ងៃខាងមុខទេ!</b>",
-                        parse_mode="HTML",
-                        reply_markup=reply_markup
-                    )
-                else:
-                    msg = f"📆 <b>Event ក្នុងរយៈពេល ៧ ថ្ងៃខាងមុខ ({len(events)} Event):</b>\n\n"
-                    for idx, event in enumerate(events, 1):
-                        msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(event)}\n"
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=msg,
-                        parse_mode="HTML",
-                        disable_web_page_preview=True,
-                        reply_markup=reply_markup
-                    )
+                msg = calendar_mgr.format_upcoming_schedule(events)
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=msg,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                    reply_markup=reply_markup
+                )
 
             elif "ស្ថានភាព" in text or "status" in text.lower() or text == "/status":
                 has_json = bool(find_json_credentials())
