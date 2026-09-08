@@ -1,5 +1,19 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "* * * * *"
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/api/cron",
+      "destination": "/api/cron.py"
+    },
+    {
+      "source": "/cron",
+      "destination": "/api/cron.py"
+    },
     {
       "source": "/(.*)",
       "destination": "/api/index.py"

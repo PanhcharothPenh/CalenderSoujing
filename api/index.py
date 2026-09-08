@@ -35,8 +35,18 @@ def catch_all(path=""):
     if request.method == "GET":
         host = request.headers.get("Host", "jingbot.p2bkh.tech")
         
+        matched_path = request.headers.get("x-matched-path", "")
+        invoke_path = request.headers.get("x-invoke-path", "")
+        is_cron = (
+            "cron" in request.path
+            or "cron" in path
+            or "cron" in matched_path
+            or "cron" in invoke_path
+            or request.args.get("cron") is not None
+        )
+
         # Cron endpoint for automated 24/7 background event reminders
-        if "cron" in request.path or "cron" in path:
+        if is_cron:
             from telegram import Bot
             import config
             from google_calendar import GoogleCalendarManager
@@ -52,7 +62,7 @@ def catch_all(path=""):
                     return "No subscribers"
                 tz = pytz.timezone(config.TIMEZONE)
                 now = datetime.datetime.now(tz)
-                window_end = now + datetime.timedelta(minutes=config.REMINDER_MINUTES + 2)
+                window_end = now + datetime.timedelta(minutes=35)
 
                 events = await asyncio.to_thread(calendar_mgr.get_events_starting_between, now, window_end)
                 sent_count = 0
@@ -65,18 +75,26 @@ def catch_all(path=""):
                     
                     start_dt = datetime.datetime.fromisoformat(start['dateTime']).astimezone(tz)
                     time_diff = (start_dt - now).total_seconds() / 60.0
-                    reminder_key = f"{event_id}_{start_dt.isoformat()}"
 
-                    if 0 <= time_diff <= config.REMINDER_MINUTES and reminder_key not in sent_reminders:
-                        event_details = calendar_mgr.format_event_message(event)
-                        msg = f"🔔 <b>[ការជូនដំណឹង] Event ជិតដល់ម៉ោងក្នុងពេល {int(time_diff)} នាទីទៀត!</b>\n\n{event_details}"
-                        for cid in subscribers:
-                            try:
-                                await bot.send_message(chat_id=cid, text=msg, parse_mode="HTML", disable_web_page_preview=True)
-                                sent_count += 1
-                            except Exception as send_err:
-                                logger.error(f"Error sending reminder to {cid}: {send_err}")
-                        sent_reminders.add(reminder_key)
+                    alert_type = None
+                    if 25.0 <= time_diff <= 32.0:
+                        alert_type = "30m"
+                    elif 0.0 <= time_diff <= 17.0:
+                        alert_type = "15m"
+
+                    if alert_type:
+                        reminder_key = f"{event_id}_{start_dt.isoformat()}_{alert_type}"
+                        if reminder_key not in sent_reminders:
+                            event_details = calendar_mgr.format_event_message(event)
+                            diff_mins = int(round(time_diff))
+                            msg = f"🔔 <b>[ការជូនដំណឹង] Event ជិតដល់ម៉ោងក្នុងពេល {diff_mins} នាទីទៀត!</b>\n\n{event_details}"
+                            for cid in subscribers:
+                                try:
+                                    await bot.send_message(chat_id=cid, text=msg, parse_mode="HTML", disable_web_page_preview=True)
+                                    sent_count += 1
+                                except Exception as send_err:
+                                    logger.error(f"Error sending reminder to {cid}: {send_err}")
+                            sent_reminders.add(reminder_key)
                 return f"Cron executed. Sent {sent_count} reminders."
 
             try:
