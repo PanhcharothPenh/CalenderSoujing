@@ -38,7 +38,8 @@ def catch_all(path=""):
         matched_path = request.headers.get("x-matched-path", "")
         invoke_path = request.headers.get("x-invoke-path", "")
         is_cron = (
-            "cron" in request.path
+            "cron" in request.url
+            or "cron" in request.path
             or "cron" in path
             or "cron" in matched_path
             or "cron" in invoke_path
@@ -95,6 +96,34 @@ def catch_all(path=""):
                                 except Exception as send_err:
                                     logger.error(f"Error sending reminder to {cid}: {send_err}")
                             sent_reminders.add(reminder_key)
+
+                # Daily summary at 07:00 AM
+                current_time_str = now.strftime("%H:%M")
+                daily_key = f"daily_summary_{now.strftime('%Y-%m-%d')}"
+                if current_time_str == config.DAILY_SUMMARY_TIME and daily_key not in sent_reminders:
+                    today_events = await asyncio.to_thread(calendar_mgr.get_today_events)
+                    today_str = now.strftime('%d/%m/%Y')
+                    if not today_events:
+                        msg = f"☀️ <b>អរុណសួស្តី! ({today_str})</b>\n\n📅 ថ្ងៃនេះគ្មាន Event រៀបចំទុកទេ! រីករាយថ្ងៃថ្មី!"
+                    else:
+                        msg = f"☀️ <b>អរុណសួស្តី! នេះជា Event ទាំងអស់សម្រាប់ថ្ងៃនេះ ({today_str}):</b>\n\n"
+                        for idx, ev in enumerate(today_events, 1):
+                            msg += f"<b>{idx}.</b> {calendar_mgr.format_event_message(ev)}\n"
+
+                    for cid in subscribers:
+                        try:
+                            await bot.send_message(
+                                chat_id=cid,
+                                text=msg,
+                                parse_mode="HTML",
+                                disable_web_page_preview=True
+                            )
+                            sent_count += 1
+                        except Exception as send_err:
+                            logger.error(f"Error sending daily summary to {cid}: {send_err}")
+
+                    sent_reminders.add(daily_key)
+
                 return f"Cron executed. Sent {sent_count} reminders."
 
             try:
