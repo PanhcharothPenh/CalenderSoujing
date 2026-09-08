@@ -35,15 +35,19 @@ def catch_all(path=""):
     if request.method == "GET":
         host = request.headers.get("Host", "jingbot.p2bkh.tech")
         
+        request_uri = request.environ.get("REQUEST_URI", "")
+        raw_uri = request.environ.get("RAW_URI", "")
         matched_path = request.headers.get("x-matched-path", "")
         invoke_path = request.headers.get("x-invoke-path", "")
         is_cron = (
-            "cron" in request.url
+            request.args.get("cron") is not None
+            or "cron" in request_uri
+            or "cron" in raw_uri
+            or "cron" in request.url
             or "cron" in request.path
             or "cron" in path
             or "cron" in matched_path
             or "cron" in invoke_path
-            or request.args.get("cron") is not None
         )
 
         # Cron endpoint for automated 24/7 background event reminders
