@@ -23,9 +23,8 @@ def get_main_keyboard():
     from telegram import ReplyKeyboardMarkup, KeyboardButton
     keyboard = [
         [KeyboardButton("📅 Event ថ្ងៃនេះ"), KeyboardButton("📆 Event ៧ថ្ងៃខាងមុខ")],
-        [KeyboardButton("🏍️ ទីតាំងម៉ូតូ"), KeyboardButton("📊 ស្ថានភាពប្រព័ន្ធ")],
         [KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ"), KeyboardButton("🔕 លុបការចុះឈ្មោះ")],
-        [KeyboardButton("ℹ️ ការណែនាំ")]
+        [KeyboardButton("📊 ស្ថានភាពប្រព័ន្ធ"), KeyboardButton("ℹ️ ការណែនាំ")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -55,11 +54,9 @@ def catch_all(path=""):
             from telegram import Bot
             import config
             from google_calendar import GoogleCalendarManager
-            from protrack import ProTrackClient
 
             bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
             calendar_mgr = GoogleCalendarManager()
-            protrack = ProTrackClient()
             subscribers = config.load_subscribers()
 
             async def process_cron():
@@ -152,7 +149,7 @@ def catch_all(path=""):
             except Exception as e:
                 return f"<h2>❌ Error setting webhook:</h2><p><code>{e}</code></p>", 500
 
-        return "OK - Google Calendar & ProTrack365 Telegram Bot is running on Vercel Serverless Function!"
+        return "OK - Google Calendar Telegram Bot is running on Vercel Serverless Function!"
 
     # POST handling for Telegram Webhook
     try:
@@ -170,11 +167,9 @@ def catch_all(path=""):
         from telegram import Bot
         import config
         from google_calendar import GoogleCalendarManager, find_json_credentials
-        from protrack import ProTrackClient
 
         bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
         calendar_mgr = GoogleCalendarManager()
-        protrack = ProTrackClient()
 
         async def process_message():
             reply_markup = get_main_keyboard()
@@ -221,47 +216,13 @@ def catch_all(path=""):
                         reply_markup=reply_markup
                     )
 
-            elif text.startswith("/set_imei") or text.startswith("/imei"):
-                parts = text.split()
-                if len(parts) > 1:
-                    new_imei = parts[1].strip()
-                    protrack.save_imei(new_imei)
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=f"✅ <b>បានកំណត់លេខ IMEI រួចរាល់:</b> <code>{new_imei}</code>\n\nសូមចុចប៊ូតុង 🏍️ ទីតាំងម៉ូតូ ដើម្បីពិនិត្យទីតាំង។",
-                        parse_mode="HTML",
-                        reply_markup=reply_markup
-                    )
-                else:
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text="👉 <b>របៀបកំណត់ IMEI:</b>\n<code>/set_imei <លេខ IMEI 15ខ្ទង់></code>\n(ឧទាហរណ៍៖ <code>/set_imei 355139086529317</code>)",
-                        parse_mode="HTML",
-                        reply_markup=reply_markup
-                    )
-
-            elif "ទីតាំង" in text or "ម៉ូតូ" in text or "ឡាន" in text or "track" in text.lower() or text == "/track":
-                parts = text.split()
-                target_imei = parts[1].strip() if len(parts) > 1 and parts[1].isdigit() else None
-                loc_data = await asyncio.to_thread(protrack.get_device_location, target_imei)
-                loc_msg = protrack.format_location_message(loc_data)
-                await bot.send_message(
-                    chat_id=chat_id,
-                    text=loc_msg,
-                    parse_mode="HTML",
-                    reply_markup=reply_markup,
-                    disable_web_page_preview=False
-                )
-
             elif "ស្ថានភាព" in text or "status" in text.lower() or text == "/status":
                 has_json = bool(find_json_credentials())
-                has_protrack = bool(config.PROTRACK_ACCOUNT and config.PROTRACK_PASSWORD)
                 subscribers = config.load_subscribers()
                 events = await asyncio.to_thread(calendar_mgr.get_today_events)
                 status_msg = (
                     "✅ <b>ប្រព័ន្ធដំណើរការជាប្រក្រតី! (Vercel Serverless OK)</b>\n\n"
                     "• 🔑 <b>Google Credentials:</b> " + ("ភ្ជាប់រួចរាល់ (Connected ✅)" if has_json else "មិនទាន់បានភ្ជាប់ ❌") + "\n"
-                    "• 🏍️ <b>ProTrack365 GPS:</b> " + ("ភ្ជាប់រួចរាល់ (Connected ✅)" if has_protrack else "មិនទាន់កំណត់ (Not Configured ⚠️)") + "\n"
                     f"• 📅 <b>Calendar ID:</b> <code>{config.GOOGLE_CALENDAR_ID}</code>\n"
                     f"• ⏰ <b>Timezone:</b> {config.TIMEZONE}\n"
                     f"• 👥 <b>អ្នកចុះឈ្មោះទទួលសារ ({len(subscribers)}):</b> <code>{', '.join(subscribers) if subscribers else 'គ្មាន'}</code>\n"
@@ -277,7 +238,7 @@ def catch_all(path=""):
             elif "ចុះឈ្មោះ" in text or text == "/start":
                 is_new = config.add_subscriber(chat_id)
                 status_text = "🎉 <b>អ្នកបានចុះឈ្មោះទទួលការជូនដំណឹងដោយស្វ័យប្រវត្តិរួចរាល់ហើយ!</b>" if is_new else "✅ <b>អ្នកកំពុងស្ថិតក្នុងបញ្ជីទទួលការជូនដំណឹងស្រាប់!</b>"
-                welcome_text = f"👋 <b>ជម្រាបសួរ! ខ្ញុំជា Telegram Bot ជូនដំណឹងពី Google Calendar & ProTrack365</b>\n\n{status_text}\n🆔 <b>Chat ID របស់អ្នក:</b> <code>{chat_id}</code>\n\n<b>👇 សូមចុចប៊ូតុងខាងក្រោមដើម្បីប្រើប្រាស់៖</b>"
+                welcome_text = f"👋 <b>ជម្រាបសួរ! ខ្ញុំជា Telegram Bot ជូនដំណឹងពី Google Calendar</b>\n\n{status_text}\n🆔 <b>Chat ID របស់អ្នក:</b> <code>{chat_id}</code>\n\n<b>👇 សូមចុចប៊ូតុងខាងក្រោមដើម្បីប្រើប្រាស់៖</b>"
                 await bot.send_message(
                     chat_id=chat_id,
                     text=welcome_text,
@@ -304,10 +265,11 @@ def catch_all(path=""):
 
             elif "ការណែនាំ" in text or "help" in text.lower() or text == "/help":
                 help_text = (
-                    "ℹ️ <b>ការណែនាំប្រើប្រាស់ Bot (Google Calendar & ProTrack365):</b>\n\n"
+                    "ℹ️ <b>ការណែនាំប្រើប្រាស់ Bot (Google Calendar):</b>\n\n"
                     "• 📅 Event ថ្ងៃនេះ - បង្ហាញកាលវិភាគថ្ងៃនេះ\n"
                     "• 📆 Event ៧ថ្ងៃខាងមុខ - បង្ហាញកាលវិភាគ ៧ថ្ងៃ\n"
-                    "• 🏍️ ទីតាំងម៉ូតូ - ពិនិត្យទីតាំង GPS និងស្ថានភាពម៉ាស៊ីន (Engine ON/OFF)\n"
+                    "• 🔔 ចុះឈ្មោះទទួលសារ - ចុះឈ្មោះទទួលសាររំលឹក\n"
+                    "• 🔕 លុបការចុះឈ្មោះ - ឈប់ទទួលសារ\n"
                     "• 📊 ស្ថានភាពប្រព័ន្ធ - ពិនិត្យស្ថានភាព Bot\n"
                 )
                 await bot.send_message(
