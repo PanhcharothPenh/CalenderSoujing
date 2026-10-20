@@ -23,8 +23,8 @@ def get_main_keyboard():
     from telegram import ReplyKeyboardMarkup, KeyboardButton
     keyboard = [
         [KeyboardButton("📅 Event ថ្ងៃនេះ"), KeyboardButton("📆 Event ៧ថ្ងៃខាងមុខ")],
-        [KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ"), KeyboardButton("🔕 លុបការចុះឈ្មោះ")],
-        [KeyboardButton("📊 ស្ថានភាពប្រព័ន្ធ"), KeyboardButton("ℹ️ ការណែនាំ")]
+        [KeyboardButton("📊 តារាងពិន្ទុ"), KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ")],
+        [KeyboardButton("🔕 លុបការចុះឈ្មោះ"), KeyboardButton("ℹ️ ការណែនាំ")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -148,15 +148,22 @@ def catch_all(path=""):
     # POST handling for Telegram Webhook
     try:
         update_data = request.get_json(force=True, silent=True) or {}
-        if "message" not in update_data:
+        msg_data = update_data.get("message") or update_data.get("channel_post") or {}
+        if not msg_data:
             return jsonify({"status": "ok", "message": "No message in update"}), 200
 
-        msg_data = update_data["message"]
         chat_id = msg_data.get("chat", {}).get("id")
         text = msg_data.get("text", "").strip()
+        caption = msg_data.get("caption", "").strip()
+        photos = msg_data.get("photo", [])
+        document = msg_data.get("document", None)
+        reply_to = msg_data.get("reply_to_message", None)
 
-        if not chat_id or not text:
-            return jsonify({"status": "ok", "message": "No chat_id or text"}), 200
+        if not chat_id:
+            return jsonify({"status": "ok", "message": "No chat_id"}), 200
+
+        if not text and not caption and not photos and not document and not reply_to:
+            return jsonify({"status": "ok", "message": "Unsupported update type"}), 200
 
         from telegram import Bot
         import config
@@ -168,6 +175,215 @@ def catch_all(path=""):
         async def process_message():
             reply_markup = get_main_keyboard()
 
+            # Check for broadcast commands (/broadcast, /announce, etc.)
+            is_broadcast = False
+            broadcast_payload = ""
+
+            for source in [text, caption]:
+                if not source:
+                    continue
+                s_lower = source.lower()
+                for cmd in ["/broadcast", "/announce", "/score_broadcast", "/post_score", "📢 ផ្សាយដំណឹង"]:
+                    if s_lower.startswith(cmd.lower()):
+                        is_broadcast = True
+                        broadcast_payload = source[len(cmd):].strip()
+                        break
+                if is_broadcast:
+                    break
+
+            if is_broadcast:
+                if not config.is_admin(chat_id):
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=(
+                            "⛔ <b>អ្នកមិនមានសិទ្ធិប្រើប្រាស់មុខងារផ្សាយដំណឹងនេះទេ!</b>\n\n"
+                            "មុខងារ <code>/broadcast</code> ត្រូវបានកំណត់សម្រាប់តែ <b>Administrator</b> ប៉ុណ្ណោះ។"
+                        ),
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
+                    )
+                    return
+
+                subscribers = config.load_subscribers()
+                if not subscribers:
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text="⚠️ <b>មិនទាន់មាន Subscribers ណាមួយបានចុះឈ្មោះនៅឡើយទេ!</b>",
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
+                    )
+                    return
+
+                tz = pytz.timezone(config.TIMEZONE)
+                now_str = datetime.datetime.now(tz).strftime('%d/%m/%Y %I:%M %p')
+
+                # Guide if empty broadcast command
+                if not broadcast_payload and not photos and not document and not reply_to:
+                    help_broadcast = (
+                        "ℹ️ <b>ការណែនាំអំពីការផ្សាយដំណឹង / តារាងពិន្ទុ (/broadcast):</b>\n\n"
+                        "1️⃣ <b>ផ្ញើរូបភាព ឬ File PDF តារាងពិន្ទុ:</b>\n"
+                        "   • ជ្រើសរើសរូបភាព ឬ File រួចដាក់ Caption: <code>/broadcast [ព័ត៌មានបន្ថែម]</code>\n\n"
+                        "2️⃣ <b>ផ្ញើសារជាអក្សរជូនដំណឹង:</b>\n"
+                        "   • វាយ: <code>/broadcast [ខ្លឹមសារសារ]</code>\n\n"
+                        "3️⃣ <b>Reply លើសារចាស់:</b>\n"
+                        "   • ចុច Reply លើរូបភាព ឬ File ណាមួយ រួចវាយ: <code>/broadcast</code>\n\n"
+                        "<i>* សារ ឬតារាងពិន្ទុនឹងត្រូវផ្ញើជូនសមាជិក (Subscribers) ទាំងអស់ភ្លាមៗ!</i>"
+                    )
+                    await bot.send_message(chat_id=chat_id, text=help_broadcast, parse_mode="HTML", reply_markup=reply_markup)
+                    return
+
+                sent_count = 0
+                fail_count = 0
+
+                # Case 1: Direct Photo broadcast
+                if photos:
+                    file_id = photos[-1]["file_id"]
+                    header = "📢 <b>តារាងពិន្ទុប្រចាំខែ (Monthly Score Report)</b> 📊\n"
+                    final_caption = f"{header}\n{broadcast_payload}\n\n🗓️ <i>{now_str}</i>" if broadcast_payload else f"{header}\nសូមពិនិត្យមើលតារាងពិន្ទុខាងលើ!\n\n🗓️ <i>{now_str}</i>"
+
+                    for sub_id in subscribers:
+                        try:
+                            await bot.send_photo(chat_id=sub_id, photo=file_id, caption=final_caption, parse_mode="HTML")
+                            sent_count += 1
+                        except Exception as e:
+                            logger.warning(f"Failed to broadcast photo to {sub_id}: {e}")
+                            fail_count += 1
+
+                    config.save_latest_score({
+                        "type": "photo",
+                        "file_id": file_id,
+                        "caption": final_caption,
+                        "date": now_str,
+                        "sender_id": chat_id
+                    })
+
+                    report = (
+                        "✅ <b>បានផ្សាយដំណឹង/តារាងពិន្ទុ (រូបភាព) ជោគជ័យ!</b>\n\n"
+                        f"👥 អ្នកទទួលបាន: <b>{sent_count}</b> នាក់\n"
+                        f"⚠️ បរាជ័យ: <b>{fail_count}</b> នាក់\n"
+                        f"🕒 កាលបរិច្ឆេទ: <b>{now_str}</b>"
+                    )
+                    await bot.send_message(chat_id=chat_id, text=report, parse_mode="HTML", reply_markup=reply_markup)
+                    return
+
+                # Case 2: Direct Document broadcast
+                elif document:
+                    file_id = document["file_id"]
+                    file_name = document.get("file_name", "Monthly_Score.pdf")
+                    header = "📢 <b>តារាងពិន្ទុប្រចាំខែ (Monthly Score Report)</b> 📊\n"
+                    final_caption = f"{header}\n📄 ឯកសារ: <code>{file_name}</code>\n\n{broadcast_payload}\n\n🗓️ <i>{now_str}</i>" if broadcast_payload else f"{header}\n📄 ឯកសារ: <code>{file_name}</code>\n\nសូមទាញយកឯកសារតារាងពិន្ទុខាងលើដើម្បីពិនិត្យមើល!\n\n🗓️ <i>{now_str}</i>"
+
+                    for sub_id in subscribers:
+                        try:
+                            await bot.send_document(chat_id=sub_id, document=file_id, caption=final_caption, parse_mode="HTML")
+                            sent_count += 1
+                        except Exception as e:
+                            logger.warning(f"Failed to broadcast document to {sub_id}: {e}")
+                            fail_count += 1
+
+                    config.save_latest_score({
+                        "type": "document",
+                        "file_id": file_id,
+                        "file_name": file_name,
+                        "caption": final_caption,
+                        "date": now_str,
+                        "sender_id": chat_id
+                    })
+
+                    report = (
+                        "✅ <b>បានផ្សាយដំណឹង/តារាងពិន្ទុ (ឯកសារ) ជោគជ័យ!</b>\n\n"
+                        f"📄 ឯកសារ: <code>{file_name}</code>\n"
+                        f"👥 អ្នកទទួលបាន: <b>{sent_count}</b> នាក់\n"
+                        f"⚠️ បរាជ័យ: <b>{fail_count}</b> នាក់\n"
+                        f"🕒 កាលបរិច្ឆេទ: <b>{now_str}</b>"
+                    )
+                    await bot.send_message(chat_id=chat_id, text=report, parse_mode="HTML", reply_markup=reply_markup)
+                    return
+
+                # Case 3: Reply to a previous message
+                elif reply_to:
+                    reply_photo = reply_to.get("photo", [])
+                    reply_doc = reply_to.get("document", None)
+                    reply_caption = reply_to.get("caption", "").strip()
+                    reply_text = reply_to.get("text", "").strip()
+
+                    if reply_photo:
+                        file_id = reply_photo[-1]["file_id"]
+                        content = broadcast_payload or reply_caption or "សូមពិនិត្យមើលតារាងពិន្ទុខាងលើ!"
+                        final_caption = f"📢 <b>តារាងពិន្ទុប្រចាំខែ (Monthly Score Report)</b> 📊\n\n{content}\n\n🗓️ <i>{now_str}</i>"
+                        for sub_id in subscribers:
+                            try:
+                                await bot.send_photo(chat_id=sub_id, photo=file_id, caption=final_caption, parse_mode="HTML")
+                                sent_count += 1
+                            except Exception as e:
+                                fail_count += 1
+                        config.save_latest_score({"type": "photo", "file_id": file_id, "caption": final_caption, "date": now_str, "sender_id": chat_id})
+
+                    elif reply_doc:
+                        file_id = reply_doc["file_id"]
+                        file_name = reply_doc.get("file_name", "Monthly_Score.pdf")
+                        content = broadcast_payload or reply_caption or "សូមទាញយកឯកសារតារាងពិន្ទុខាងលើដើម្បីពិនិត្យមើល!"
+                        final_caption = f"📢 <b>តារាងពិន្ទុប្រចាំខែ (Monthly Score Report)</b> 📊\n📄 ឯកសារ: <code>{file_name}</code>\n\n{content}\n\n🗓️ <i>{now_str}</i>"
+                        for sub_id in subscribers:
+                            try:
+                                await bot.send_document(chat_id=sub_id, document=file_id, caption=final_caption, parse_mode="HTML")
+                                sent_count += 1
+                            except Exception as e:
+                                fail_count += 1
+                        config.save_latest_score({"type": "document", "file_id": file_id, "file_name": file_name, "caption": final_caption, "date": now_str, "sender_id": chat_id})
+
+                    else:
+                        content = broadcast_payload or reply_text
+                        final_text = f"📢 <b>សេចក្តីជូនដំណឹង / តារាងពិន្ទុប្រចាំខែ</b> 📊\n\n{content}\n\n🗓️ <i>{now_str}</i>"
+                        for sub_id in subscribers:
+                            try:
+                                await bot.send_message(chat_id=sub_id, text=final_text, parse_mode="HTML", disable_web_page_preview=True)
+                                sent_count += 1
+                            except Exception as e:
+                                fail_count += 1
+                        config.save_latest_score({"type": "text", "text": final_text, "date": now_str, "sender_id": chat_id})
+
+                    report = (
+                        "✅ <b>បានផ្សាយដំណឹង/តារាងពិន្ទុជោគជ័យ!</b>\n\n"
+                        f"👥 អ្នកទទួលបាន: <b>{sent_count}</b> នាក់\n"
+                        f"⚠️ បរាជ័យ: <b>{fail_count}</b> នាក់\n"
+                        f"🕒 កាលបរិច្ឆេទ: <b>{now_str}</b>"
+                    )
+                    await bot.send_message(chat_id=chat_id, text=report, parse_mode="HTML", reply_markup=reply_markup)
+                    return
+
+                # Case 4: Text broadcast
+                else:
+                    final_text = (
+                        "📢 <b>សេចក្តីជូនដំណឹង / តារាងពិន្ទុប្រចាំខែ</b> 📊\n\n"
+                        f"{broadcast_payload}\n\n"
+                        f"🗓️ <i>{now_str}</i>"
+                    )
+                    for sub_id in subscribers:
+                        try:
+                            await bot.send_message(chat_id=sub_id, text=final_text, parse_mode="HTML", disable_web_page_preview=True)
+                            sent_count += 1
+                        except Exception as e:
+                            logger.warning(f"Failed to broadcast text to {sub_id}: {e}")
+                            fail_count += 1
+
+                    config.save_latest_score({
+                        "type": "text",
+                        "text": final_text,
+                        "date": now_str,
+                        "sender_id": chat_id
+                    })
+
+                    report = (
+                        "✅ <b>បានផ្សាយដំណឹងជាអក្សរជោគជ័យ!</b>\n\n"
+                        f"👥 អ្នកទទួលបាន: <b>{sent_count}</b> នាក់\n"
+                        f"⚠️ បរាជ័យ: <b>{fail_count}</b> នាក់\n"
+                        f"🕒 កាលបរិច្ឆេទ: <b>{now_str}</b>"
+                    )
+                    await bot.send_message(chat_id=chat_id, text=report, parse_mode="HTML", reply_markup=reply_markup)
+                    return
+
+            # Regular Command & Button Handlers
             if "Event ថ្ងៃនេះ" in text or "ថ្ងៃនេះ" in text or text == "/today":
                 events = await asyncio.to_thread(calendar_mgr.get_today_events)
                 msg = calendar_mgr.format_daily_schedule(events)
@@ -190,16 +406,56 @@ def catch_all(path=""):
                     reply_markup=reply_markup
                 )
 
+            elif "តារាងពិន្ទុ" in text or "ពិន្ទុ" in text or text in ["/score", "/scores"]:
+                score_data = config.get_latest_score()
+                if not score_data:
+                    empty_msg = (
+                        "📊 <b>តារាងពិន្ទុប្រចាំខែ (Monthly Score Report)</b>\n\n"
+                        "ℹ️ បច្ចុប្បន្នមិនទាន់មានការបង្ហោះតារាងពិន្ទុថ្មីនៅឡើយទេ។\n"
+                        "សូមរង់ចាំការជូនដំណឹងជាផ្លូវការ ឬសួរលោកគ្រូ/អ្នកគ្រូ។"
+                    )
+                    await bot.send_message(chat_id=chat_id, text=empty_msg, parse_mode="HTML", reply_markup=reply_markup)
+                else:
+                    stype = score_data.get("type")
+                    if stype == "photo":
+                        await bot.send_photo(
+                            chat_id=chat_id,
+                            photo=score_data.get("file_id"),
+                            caption=score_data.get("caption", "📊 <b>តារាងពិន្ទុប្រចាំខែ</b>"),
+                            parse_mode="HTML",
+                            reply_markup=reply_markup
+                        )
+                    elif stype == "document":
+                        await bot.send_document(
+                            chat_id=chat_id,
+                            document=score_data.get("file_id"),
+                            caption=score_data.get("caption", "📊 <b>តារាងពិន្ទុប្រចាំខែ</b>"),
+                            parse_mode="HTML",
+                            reply_markup=reply_markup
+                        )
+                    elif stype == "text":
+                        await bot.send_message(
+                            chat_id=chat_id,
+                            text=score_data.get("text", "📊 <b>តារាងពិន្ទុប្រចាំខែ</b>"),
+                            parse_mode="HTML",
+                            disable_web_page_preview=True,
+                            reply_markup=reply_markup
+                        )
+
             elif "ស្ថានភាព" in text or "status" in text.lower() or text == "/status":
                 has_json = bool(find_json_credentials())
                 subscribers = config.load_subscribers()
                 events = await asyncio.to_thread(calendar_mgr.get_today_events)
+                latest_score = config.get_latest_score()
+                score_info = f"{latest_score.get('date', 'មិនទាន់មាន')} ({latest_score.get('type', 'none')})" if latest_score else "មិនទាន់មាន"
+
                 status_msg = (
                     "✅ <b>ប្រព័ន្ធដំណើរការជាប្រក្រតី! (Vercel Serverless OK)</b>\n\n"
                     "• 🔑 <b>Google Credentials:</b> " + ("ភ្ជាប់រួចរាល់ (Connected ✅)" if has_json else "មិនទាន់បានភ្ជាប់ ❌") + "\n"
                     f"• 📅 <b>Calendar ID:</b> <code>{config.GOOGLE_CALENDAR_ID}</code>\n"
                     f"• ⏰ <b>Timezone:</b> {config.TIMEZONE}\n"
                     f"• 👥 <b>អ្នកចុះឈ្មោះទទួលសារ ({len(subscribers)}):</b> <code>{', '.join(subscribers) if subscribers else 'គ្មាន'}</code>\n"
+                    f"• 📊 <b>តារាងពិន្ទុចុងក្រោយ:</b> {score_info}\n"
                     f"• ☀️ <b>Events ថ្ងៃនេះ:</b> {len(events)} Event\n"
                 )
                 await bot.send_message(
@@ -212,7 +468,7 @@ def catch_all(path=""):
             elif "ចុះឈ្មោះ" in text or text == "/start":
                 is_new = config.add_subscriber(chat_id)
                 status_text = "🎉 <b>អ្នកបានចុះឈ្មោះទទួលការជូនដំណឹងដោយស្វ័យប្រវត្តិរួចរាល់ហើយ!</b>" if is_new else "✅ <b>អ្នកកំពុងស្ថិតក្នុងបញ្ជីទទួលការជូនដំណឹងស្រាប់!</b>"
-                welcome_text = f"👋 <b>ជម្រាបសួរ! ខ្ញុំជា Telegram Bot ជូនដំណឹងពី Google Calendar</b>\n\n{status_text}\n🆔 <b>Chat ID របស់អ្នក:</b> <code>{chat_id}</code>\n\n<b>👇 សូមចុចប៊ូតុងខាងក្រោមដើម្បីប្រើប្រាស់៖</b>"
+                welcome_text = f"👋 <b>ជម្រាបសួរ! ខ្ញុំជា Telegram Bot ជូនដំណឹងពី Google Calendar និងតារាងពិន្ទុ</b>\n\n{status_text}\n🆔 <b>Chat ID របស់អ្នក:</b> <code>{chat_id}</code>\n\n<b>👇 សូមចុចប៊ូតុងខាងក្រោមដើម្បីប្រើប្រាស់៖</b>"
                 await bot.send_message(
                     chat_id=chat_id,
                     text=welcome_text,
@@ -239,12 +495,15 @@ def catch_all(path=""):
 
             elif "ការណែនាំ" in text or "help" in text.lower() or text == "/help":
                 help_text = (
-                    "ℹ️ <b>ការណែនាំប្រើប្រាស់ Bot (Google Calendar):</b>\n\n"
+                    "ℹ️ <b>ការណែនាំប្រើប្រាស់ Bot:</b>\n\n"
                     "• 📅 Event ថ្ងៃនេះ - បង្ហាញកាលវិភាគថ្ងៃនេះ\n"
                     "• 📆 Event ៧ថ្ងៃខាងមុខ - បង្ហាញកាលវិភាគ ៧ថ្ងៃ\n"
+                    "• 📊 តារាងពិន្ទុ - មើលតារាងពិន្ទុប្រចាំខែចុងក្រោយ\n"
                     "• 🔔 ចុះឈ្មោះទទួលសារ - ចុះឈ្មោះទទួលសាររំលឹក\n"
                     "• 🔕 លុបការចុះឈ្មោះ - ឈប់ទទួលសារ\n"
-                    "• 📊 ស្ថានភាពប្រព័ន្ធ - ពិនិត្យស្ថានភាព Bot\n"
+                    "• 📊 ស្ថានភាពប្រព័ន្ធ (/status) - ពិនិត្យស្ថានភាព Bot\n\n"
+                    "👑 <b>សម្រាប់ Admin:</b>\n"
+                    "• <code>/broadcast [សារ/រូប/File]</code> - ផ្សាយដំណឹង/តារាងពិន្ទុទៅកាន់ Subscribers ទាំងអស់\n"
                 )
                 await bot.send_message(
                     chat_id=chat_id,

@@ -30,7 +30,17 @@ raw_rem = os.getenv("REMINDER_MINUTES", "15").strip()
 REMINDER_MINUTES = int(raw_rem) if raw_rem.isdigit() else 15
 
 DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "").strip() or "07:00"
-SUBSCRIBERS_FILE = Path("/tmp/subscribers.json")
+
+# Persistent storage paths (support Vercel /tmp or local fallback)
+if os.environ.get("VERCEL") or Path("/tmp").exists():
+    SUBSCRIBERS_FILE = Path("/tmp/subscribers.json")
+    SCORE_FILE = Path("/tmp/latest_score.json")
+else:
+    SUBSCRIBERS_FILE = BASE_DIR / "subscribers.json"
+    SCORE_FILE = BASE_DIR / "latest_score.json"
+
+# In-memory score cache
+_latest_score_cache = None
 
 # ProTrack365 GPS Integration
 PROTRACK_ACCOUNT = os.getenv("PROTRACK_ACCOUNT", "").strip() or "355139086529317"
@@ -111,9 +121,52 @@ def remove_subscriber(chat_id: Union[str, int]) -> bool:
         return True
     return False
 
-def _save_subscribers(subscribers: Set[str]):
-    """Internal helper to save subscribers to subscribers.json in /tmp."""
+def get_admin_ids() -> Set[str]:
+    """Parse admin IDs from ADMIN_CHAT_ID, TELEGRAM_CHAT_ID or default fallback."""
+    admins = set(get_env_chat_ids())
+    raw_admin = os.getenv("ADMIN_CHAT_ID", "").strip()
+    if raw_admin:
+        for aid in raw_admin.split(","):
+            if aid.strip():
+                admins.add(aid.strip())
+    admins.add("7818150707")
+    return admins
+
+def is_admin(chat_id: Union[str, int]) -> bool:
+    """Check if given chat_id is an authorized administrator."""
+    return str(chat_id).strip() in get_admin_ids()
+
+def get_latest_score() -> dict:
+    """Retrieve the latest score announcement from file or memory cache."""
+    global _latest_score_cache
+    if SCORE_FILE.exists():
+        try:
+            with open(SCORE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    _latest_score_cache = data
+                    return data
+        except Exception as e:
+            logger.error(f"Error reading {SCORE_FILE}: {e}")
+    return _latest_score_cache or {}
+
+def save_latest_score(score_data: dict) -> bool:
+    """Save the latest score announcement to file and memory cache."""
+    global _latest_score_cache
+    _latest_score_cache = score_data
     try:
+        SCORE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(SCORE_FILE, "w", encoding="utf-8") as f:
+            json.dump(score_data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving {SCORE_FILE}: {e}")
+        return False
+
+def _save_subscribers(subscribers: Set[str]):
+    """Internal helper to save subscribers to subscribers.json."""
+    try:
+        SUBSCRIBERS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as f:
             json.dump(sorted(list(subscribers)), f, indent=2)
     except Exception as e:
