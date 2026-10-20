@@ -153,7 +153,10 @@ def catch_all(path=""):
             
             async def _set():
                 bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
-                await bot.set_webhook(url=webhook_url)
+                await bot.set_webhook(
+                    url=webhook_url,
+                    allowed_updates=["message", "edited_message", "channel_post", "edited_channel_post", "callback_query"]
+                )
 
             try:
                 asyncio.run(_set())
@@ -191,28 +194,58 @@ def catch_all(path=""):
 
             async def process_callback():
                 if not config.is_admin(user_id):
-                    await bot.answer_callback_query(
-                        callback_query_id=query_id,
-                        text="⛔ អ្នកមិនមានសិទ្ធិប្រើប្រាស់មុខងារនេះទេ!",
-                        show_alert=True
-                    )
+                    try:
+                        await bot.answer_callback_query(
+                            callback_query_id=query_id,
+                            text="⛔ អ្នកមិនមានសិទ្ធិប្រើប្រាស់មុខងារនេះទេ!",
+                            show_alert=True
+                        )
+                    except Exception:
+                        pass
                     return
 
                 if data.startswith("bcast:"):
                     key = data.split(":", 1)[1]
                     pending = config.get_pending_broadcast(key)
                     if not pending:
-                        await bot.answer_callback_query(
-                            callback_query_id=query_id,
-                            text="⚠️ ឯកសារនេះផុតកំណត់ ឬត្រូវបានផ្សាយរួចហើយ!",
-                            show_alert=True
-                        )
+                        reply_msg = cb_msg.get("reply_to_message") or {}
+                        r_photos = reply_msg.get("photo", [])
+                        r_doc = reply_msg.get("document", None)
+                        r_caption = reply_msg.get("caption", "").strip()
+                        if r_photos:
+                            pending = {
+                                "type": "photo",
+                                "file_id": r_photos[-1]["file_id"],
+                                "caption": r_caption,
+                                "sender_id": user_id
+                            }
+                        elif r_doc:
+                            pending = {
+                                "type": "document",
+                                "file_id": r_doc["file_id"],
+                                "file_name": r_doc.get("file_name", "Monthly_Score.pdf"),
+                                "caption": r_caption,
+                                "sender_id": user_id
+                            }
+
+                    if not pending:
+                        try:
+                            await bot.answer_callback_query(
+                                callback_query_id=query_id,
+                                text="⚠️ ឯកសារនេះផុតកំណត់ ឬត្រូវបានផ្សាយរួចហើយ! សូមផ្ញើរូបភាពម្តងទៀត។",
+                                show_alert=True
+                            )
+                        except Exception:
+                            pass
                         return
 
-                    await bot.answer_callback_query(
-                        callback_query_id=query_id,
-                        text="🚀 កំពុងផ្សាយដំណឹងទៅកាន់សិស្សទាំងអស់..."
-                    )
+                    try:
+                        await bot.answer_callback_query(
+                            callback_query_id=query_id,
+                            text="🚀 កំពុងផ្សាយដំណឹងទៅកាន់សិស្សទាំងអស់..."
+                        )
+                    except Exception as e:
+                        logger.warning(f"Error answering callback query: {e}")
 
                     subscribers = config.load_subscribers()
                     tz = pytz.timezone(config.TIMEZONE)
@@ -291,10 +324,13 @@ def catch_all(path=""):
                 elif data.startswith("cancel:"):
                     key = data.split(":", 1)[1]
                     config.remove_pending_broadcast(key)
-                    await bot.answer_callback_query(
-                        callback_query_id=query_id,
-                        text="បានបោះបង់!"
-                    )
+                    try:
+                        await bot.answer_callback_query(
+                            callback_query_id=query_id,
+                            text="បានបោះបង់!"
+                        )
+                    except Exception:
+                        pass
                     try:
                         await bot.edit_message_text(
                             chat_id=cb_chat_id,
@@ -394,9 +430,11 @@ def catch_all(path=""):
                     [InlineKeyboardButton("📢 ផ្សាយទៅកាន់សិស្សទាំងអស់", callback_data=f"bcast:{bcast_key}")],
                     [InlineKeyboardButton("❌ បោះបង់", callback_data=f"cancel:{bcast_key}")]
                 ])
+                msg_id = msg_data.get("message_id")
                 await bot.send_message(
                     chat_id=chat_id,
                     text=confirm_text,
+                    reply_to_message_id=msg_id,
                     parse_mode="HTML",
                     reply_markup=inline_kb
                 )

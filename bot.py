@@ -466,7 +466,10 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
     user_id = query.from_user.id
     if not config.is_admin(user_id):
-        await query.answer("⛔ អ្នកមិនមានសិទ្ធិប្រើប្រាស់មុខងារនេះទេ!", show_alert=True)
+        try:
+            await query.answer("⛔ អ្នកមិនមានសិទ្ធិប្រើប្រាស់មុខងារនេះទេ!", show_alert=True)
+        except Exception:
+            pass
         return
 
     data = query.data or ""
@@ -474,10 +477,38 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         key = data.split(":", 1)[1]
         pending = config.get_pending_broadcast(key)
         if not pending:
-            await query.answer("⚠️ ឯកសារនេះផុតកំណត់ ឬត្រូវបានផ្សាយរួចហើយ!", show_alert=True)
+            reply_msg = query.message.reply_to_message if query.message else None
+            if reply_msg:
+                r_photos = reply_msg.photo
+                r_doc = reply_msg.document
+                r_caption = reply_msg.caption or ""
+                if r_photos:
+                    pending = {
+                        "type": "photo",
+                        "file_id": r_photos[-1].file_id,
+                        "caption": r_caption,
+                        "sender_id": user_id
+                    }
+                elif r_doc:
+                    pending = {
+                        "type": "document",
+                        "file_id": r_doc.file_id,
+                        "file_name": r_doc.file_name or "Monthly_Score.pdf",
+                        "caption": r_caption,
+                        "sender_id": user_id
+                    }
+
+        if not pending:
+            try:
+                await query.answer("⚠️ ឯកសារនេះផុតកំណត់ ឬត្រូវបានផ្សាយរួចហើយ! សូមផ្ញើរូបភាពម្តងទៀត។", show_alert=True)
+            except Exception:
+                pass
             return
 
-        await query.answer("🚀 កំពុងផ្សាយដំណឹងទៅកាន់សិស្សទាំងអស់...")
+        try:
+            await query.answer("🚀 កំពុងផ្សាយដំណឹងទៅកាន់សិស្សទាំងអស់...")
+        except Exception:
+            pass
         subscribers = config.load_subscribers()
         tz = pytz.timezone(config.TIMEZONE)
         now_str = datetime.datetime.now(tz).strftime('%d/%m/%Y %I:%M %p')
