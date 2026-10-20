@@ -128,7 +128,17 @@ def catch_all(path=""):
                 return jsonify({"status": "error", "message": str(e)}), 500
 
         # Webhook setup endpoint
-        if "set_webhook" in request.path or "set_webhook" in path:
+        is_set_webhook = (
+            request.args.get("set_webhook") is not None
+            or "set_webhook" in request_uri
+            or "set_webhook" in raw_uri
+            or "set_webhook" in request.url
+            or "set_webhook" in request.path
+            or "set_webhook" in path
+            or "set_webhook" in matched_path
+            or "set_webhook" in invoke_path
+        )
+        if is_set_webhook:
             webhook_url = f"https://{host}/"
             from telegram import Bot
             import config
