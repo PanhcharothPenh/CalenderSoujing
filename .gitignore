@@ -3,6 +3,7 @@
 credentials.json
 subscribers.json
 latest_score.json
+pending_bcasts.json
 
 # Python bytecode & cache
 __pycache__/

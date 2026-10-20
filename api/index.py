@@ -19,13 +19,21 @@ logger = logging.getLogger(__name__)
 # Global cache to prevent duplicate reminder notifications
 sent_reminders = set()
 
-def get_main_keyboard():
+def get_main_keyboard(is_admin_user=False):
     from telegram import ReplyKeyboardMarkup, KeyboardButton
-    keyboard = [
-        [KeyboardButton("📅 Event ថ្ងៃនេះ"), KeyboardButton("📆 Event ៧ថ្ងៃខាងមុខ")],
-        [KeyboardButton("📊 តារាងពិន្ទុ"), KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ")],
-        [KeyboardButton("🔕 លុបការចុះឈ្មោះ"), KeyboardButton("ℹ️ ការណែនាំ")]
-    ]
+    if is_admin_user:
+        keyboard = [
+            [KeyboardButton("📅 Event ថ្ងៃនេះ"), KeyboardButton("📆 Event ៧ថ្ងៃខាងមុខ")],
+            [KeyboardButton("📊 តារាងពិន្ទុ"), KeyboardButton("📢 ផ្សាយតារាងពិន្ទុ")],
+            [KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ"), KeyboardButton("🔕 លុបការចុះឈ្មោះ")],
+            [KeyboardButton("ℹ️ ការណែនាំ")]
+        ]
+    else:
+        keyboard = [
+            [KeyboardButton("📅 Event ថ្ងៃនេះ"), KeyboardButton("📆 Event ៧ថ្ងៃខាងមុខ")],
+            [KeyboardButton("📊 តារាងពិន្ទុ"), KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ")],
+            [KeyboardButton("🔕 លុបការចុះឈ្មោះ"), KeyboardButton("ℹ️ ការណែនាំ")]
+        ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 @app.route("/", methods=["GET", "POST"])
@@ -158,9 +166,147 @@ def catch_all(path=""):
     # POST handling for Telegram Webhook
     try:
         update_data = request.get_json(force=True, silent=True) or {}
+        callback_query = update_data.get("callback_query")
         msg_data = update_data.get("message") or update_data.get("channel_post") or {}
-        if not msg_data:
-            return jsonify({"status": "ok", "message": "No message in update"}), 200
+
+        if not callback_query and not msg_data:
+            return jsonify({"status": "ok", "message": "No actionable update"}), 200
+
+        from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
+        import config
+        from google_calendar import GoogleCalendarManager, find_json_credentials
+
+        bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
+        calendar_mgr = GoogleCalendarManager()
+
+        # Handle 1-Click Callback Query from Inline Buttons
+        if callback_query:
+            query_id = callback_query.get("id")
+            from_user = callback_query.get("from", {})
+            user_id = from_user.get("id")
+            cb_msg = callback_query.get("message", {})
+            cb_chat_id = cb_msg.get("chat", {}).get("id")
+            cb_message_id = cb_msg.get("message_id")
+            data = callback_query.get("data", "")
+
+            async def process_callback():
+                if not config.is_admin(user_id):
+                    await bot.answer_callback_query(
+                        callback_query_id=query_id,
+                        text="⛔ អ្នកមិនមានសិទ្ធិប្រើប្រាស់មុខងារនេះទេ!",
+                        show_alert=True
+                    )
+                    return
+
+                if data.startswith("bcast:"):
+                    key = data.split(":", 1)[1]
+                    pending = config.get_pending_broadcast(key)
+                    if not pending:
+                        await bot.answer_callback_query(
+                            callback_query_id=query_id,
+                            text="⚠️ ឯកសារនេះផុតកំណត់ ឬត្រូវបានផ្សាយរួចហើយ!",
+                            show_alert=True
+                        )
+                        return
+
+                    await bot.answer_callback_query(
+                        callback_query_id=query_id,
+                        text="🚀 កំពុងផ្សាយដំណឹងទៅកាន់សិស្សទាំងអស់..."
+                    )
+
+                    subscribers = config.load_subscribers()
+                    tz = pytz.timezone(config.TIMEZONE)
+                    now_str = datetime.datetime.now(tz).strftime('%d/%m/%Y %I:%M %p')
+
+                    b_type = pending.get("type")
+                    file_id = pending.get("file_id")
+                    file_name = pending.get("file_name", "Monthly_Score.pdf")
+                    user_caption = pending.get("caption", "").strip()
+
+                    header = "📢 <b>តារាងពិន្ទុប្រចាំខែ (Monthly Score Report)</b> 📊\n"
+                    if user_caption:
+                        final_caption = f"{header}\n{user_caption}\n\n🗓️ <i>{now_str}</i>"
+                    else:
+                        final_caption = f"{header}\nសូមពិនិត្យមើលតារាងពិន្ទុខាងលើ!\n\n🗓️ <i>{now_str}</i>"
+
+                    sent_count = 0
+                    fail_count = 0
+
+                    if b_type == "photo":
+                        for sub_id in subscribers:
+                            try:
+                                await bot.send_photo(chat_id=sub_id, photo=file_id, caption=final_caption, parse_mode="HTML")
+                                sent_count += 1
+                            except Exception as e:
+                                fail_count += 1
+
+                        config.save_latest_score({
+                            "type": "photo",
+                            "file_id": file_id,
+                            "caption": final_caption,
+                            "date": now_str,
+                            "sender_id": user_id
+                        })
+
+                    elif b_type == "document":
+                        doc_caption = f"{header}\n📄 ឯកសារ: <code>{file_name}</code>\n\n{user_caption or 'សូមទាញយកឯកសារតារាងពិន្ទុខាងលើ!'}\n\n🗓️ <i>{now_str}</i>"
+                        for sub_id in subscribers:
+                            try:
+                                await bot.send_document(chat_id=sub_id, document=file_id, caption=doc_caption, parse_mode="HTML")
+                                sent_count += 1
+                            except Exception as e:
+                                fail_count += 1
+
+                        config.save_latest_score({
+                            "type": "document",
+                            "file_id": file_id,
+                            "file_name": file_name,
+                            "caption": doc_caption,
+                            "date": now_str,
+                            "sender_id": user_id
+                        })
+
+                    config.remove_pending_broadcast(key)
+
+                    report = (
+                        "✅ <b>បានផ្សាយដំណឹង/តារាងពិន្ទុជូនសិស្សទាំងអស់ជោគជ័យ!</b>\n\n"
+                        f"👥 អ្នកទទួលបាន: <b>{sent_count}</b> នាក់\n"
+                        f"⚠️ បរាជ័យ: <b>{fail_count}</b> នាក់\n"
+                        f"🕒 កាលបរិច្ឆេទ: <b>{now_str}</b>"
+                    )
+                    try:
+                        await bot.edit_message_text(
+                            chat_id=cb_chat_id,
+                            message_id=cb_message_id,
+                            text=report,
+                            parse_mode="HTML"
+                        )
+                    except Exception:
+                        await bot.send_message(
+                            chat_id=cb_chat_id,
+                            text=report,
+                            parse_mode="HTML"
+                        )
+
+                elif data.startswith("cancel:"):
+                    key = data.split(":", 1)[1]
+                    config.remove_pending_broadcast(key)
+                    await bot.answer_callback_query(
+                        callback_query_id=query_id,
+                        text="បានបោះបង់!"
+                    )
+                    try:
+                        await bot.edit_message_text(
+                            chat_id=cb_chat_id,
+                            message_id=cb_message_id,
+                            text="❌ <b>បានបោះបង់ការផ្សាយដំណឹង។</b>",
+                            parse_mode="HTML"
+                        )
+                    except Exception:
+                        pass
+
+            asyncio.run(process_callback())
+            return jsonify({"status": "ok"})
 
         chat_id = msg_data.get("chat", {}).get("id")
         text = msg_data.get("text", "").strip()
@@ -175,15 +321,32 @@ def catch_all(path=""):
         if not text and not caption and not photos and not document and not reply_to:
             return jsonify({"status": "ok", "message": "Unsupported update type"}), 200
 
-        from telegram import Bot
-        import config
-        from google_calendar import GoogleCalendarManager, find_json_credentials
-
-        bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
-        calendar_mgr = GoogleCalendarManager()
-
         async def process_message():
-            reply_markup = get_main_keyboard()
+            is_admin_user = config.is_admin(chat_id)
+            reply_markup = get_main_keyboard(is_admin_user=is_admin_user)
+
+            # 1. Admin tapped "📢 ផ្សាយតារាងពិន្ទុ"
+            if "ផ្សាយតារាងពិន្ទុ" in text:
+                if not is_admin_user:
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text="⛔ <b>មុខងារនេះសម្រាប់តែ Administrator ប៉ុណ្ណោះ!</b>",
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
+                    )
+                    return
+                prompt_msg = (
+                    "📤 <b>សូមផ្ញើរូបភាព ឬ File PDF តារាងពិន្ទុមកកាន់ទីនេះ៖</b>\n\n"
+                    "• អ្នកគ្រាន់តែផ្ញើ ឬ Forward រូបភាព ឬ File PDF ចូលក្នុង Chat នេះ\n"
+                    "• រួច Bot នឹងបង្ហាញប៊ូតុង <code>[📢 ផ្សាយទៅកាន់សិស្សទាំងអស់]</code> ឱ្យចុចបញ្ជាក់ភ្លាមៗ! ⚡"
+                )
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=prompt_msg,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
+                return
 
             # Check for broadcast commands (/broadcast, /announce, etc.)
             is_broadcast = False
@@ -200,6 +363,44 @@ def catch_all(path=""):
                         break
                 if is_broadcast:
                     break
+
+            # 2. Easy 1-Click: Admin sent photo or document WITHOUT /broadcast command
+            if is_admin_user and (photos or document) and not is_broadcast:
+                import uuid
+                bcast_key = str(uuid.uuid4())[:8]
+
+                file_type = "photo" if photos else "document"
+                file_id = photos[-1]["file_id"] if photos else document["file_id"]
+                file_name = document.get("file_name", "Monthly_Score.pdf") if document else None
+
+                config.save_pending_broadcast(bcast_key, {
+                    "type": file_type,
+                    "file_id": file_id,
+                    "file_name": file_name,
+                    "caption": caption,
+                    "admin_id": chat_id
+                })
+
+                subscribers = config.load_subscribers()
+                type_name = "រូបភាពតារាងពិន្ទុ (Photo)" if photos else f"ឯកសារ ({file_name})"
+                confirm_text = (
+                    "📥 <b>បានទទួលឯកសារ/រូបភាពតារាងពិន្ទុ!</b>\n\n"
+                    f"📄 ប្រភេទ: <b>{type_name}</b>\n"
+                    f"👥 សិស្សទទួលសារ (Subscribers): <b>{len(subscribers)} នាក់</b>\n"
+                    f"💬 ចំណាំ (Caption): <i>{caption or 'គ្មាន'}</i>\n\n"
+                    "👇 <b>តើអ្នកចង់ផ្សាយដំណឹងនេះទៅកាន់សិស្សទាំងអស់ដែរឬទេ?</b>"
+                )
+                inline_kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📢 ផ្សាយទៅកាន់សិស្សទាំងអស់", callback_data=f"bcast:{bcast_key}")],
+                    [InlineKeyboardButton("❌ បោះបង់", callback_data=f"cancel:{bcast_key}")]
+                ])
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=confirm_text,
+                    parse_mode="HTML",
+                    reply_markup=inline_kb
+                )
+                return
 
             if is_broadcast:
                 if not config.is_admin(chat_id):
@@ -232,7 +433,7 @@ def catch_all(path=""):
                     help_broadcast = (
                         "ℹ️ <b>ការណែនាំអំពីការផ្សាយដំណឹង / តារាងពិន្ទុ (/broadcast):</b>\n\n"
                         "1️⃣ <b>ផ្ញើរូបភាព ឬ File PDF តារាងពិន្ទុ:</b>\n"
-                        "   • ជ្រើសរើសរូបភាព ឬ File រួចដាក់ Caption: <code>/broadcast [ព័ត៌មានបន្ថែម]</code>\n\n"
+                        "   • គ្រាន់តែផ្ញើរូបភាព ឬ File ចូលក្នុង Chat នេះ នោះ Bot នឹងសួររកការផ្សាយដោយស្វ័យប្រវត្តិ!\n\n"
                         "2️⃣ <b>ផ្ញើសារជាអក្សរជូនដំណឹង:</b>\n"
                         "   • វាយ: <code>/broadcast [ខ្លឹមសារសារ]</code>\n\n"
                         "3️⃣ <b>Reply លើសារចាស់:</b>\n"
@@ -513,7 +714,7 @@ def catch_all(path=""):
                     "• 🔕 លុបការចុះឈ្មោះ - ឈប់ទទួលសារ\n"
                     "• 📊 ស្ថានភាពប្រព័ន្ធ (/status) - ពិនិត្យស្ថានភាព Bot\n\n"
                     "👑 <b>សម្រាប់ Admin:</b>\n"
-                    "• <code>/broadcast [សារ/រូប/File]</code> - ផ្សាយដំណឹង/តារាងពិន្ទុទៅកាន់ Subscribers ទាំងអស់\n"
+                    "• គ្រាន់តែផ្ញើរូបភាព ឬ File PDF ចូលក្នុង Chat នេះ រួចចុចប៊ូតុង <code>[📢 ផ្សាយទៅកាន់សិស្សទាំងអស់]</code> ដើម្បីផ្សាយភ្លាមៗ!\n"
                 )
                 await bot.send_message(
                     chat_id=chat_id,

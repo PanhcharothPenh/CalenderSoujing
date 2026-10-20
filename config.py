@@ -35,12 +35,15 @@ DAILY_SUMMARY_TIME = os.getenv("DAILY_SUMMARY_TIME", "").strip() or "07:00"
 if os.environ.get("VERCEL") or Path("/tmp").exists():
     SUBSCRIBERS_FILE = Path("/tmp/subscribers.json")
     SCORE_FILE = Path("/tmp/latest_score.json")
+    PENDING_BROADCASTS_FILE = Path("/tmp/pending_bcasts.json")
 else:
     SUBSCRIBERS_FILE = BASE_DIR / "subscribers.json"
     SCORE_FILE = BASE_DIR / "latest_score.json"
+    PENDING_BROADCASTS_FILE = BASE_DIR / "pending_bcasts.json"
 
-# In-memory score cache
+# In-memory caches
 _latest_score_cache = None
+_pending_broadcasts = {}
 
 # ProTrack365 GPS Integration
 PROTRACK_ACCOUNT = os.getenv("PROTRACK_ACCOUNT", "").strip() or "355139086529317"
@@ -162,6 +165,54 @@ def save_latest_score(score_data: dict) -> bool:
     except Exception as e:
         logger.error(f"Error saving {SCORE_FILE}: {e}")
         return False
+
+def save_pending_broadcast(key: str, data: dict):
+    """Save pending broadcast awaiting 1-click confirmation."""
+    global _pending_broadcasts
+    _pending_broadcasts[key] = data
+    try:
+        PENDING_BROADCASTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        all_data = {}
+        if PENDING_BROADCASTS_FILE.exists():
+            try:
+                with open(PENDING_BROADCASTS_FILE, "r", encoding="utf-8") as f:
+                    all_data = json.load(f)
+            except Exception:
+                all_data = {}
+        all_data[key] = data
+        with open(PENDING_BROADCASTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(all_data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Error saving pending broadcast: {e}")
+
+def get_pending_broadcast(key: str) -> dict:
+    """Retrieve pending broadcast by key."""
+    global _pending_broadcasts
+    if key in _pending_broadcasts:
+        return _pending_broadcasts.get(key)
+    if PENDING_BROADCASTS_FILE.exists():
+        try:
+            with open(PENDING_BROADCASTS_FILE, "r", encoding="utf-8") as f:
+                all_data = json.load(f)
+                return all_data.get(key, {})
+        except Exception as e:
+            logger.error(f"Error reading pending broadcast: {e}")
+    return {}
+
+def remove_pending_broadcast(key: str):
+    """Delete confirmed or cancelled broadcast."""
+    global _pending_broadcasts
+    _pending_broadcasts.pop(key, None)
+    if PENDING_BROADCASTS_FILE.exists():
+        try:
+            with open(PENDING_BROADCASTS_FILE, "r", encoding="utf-8") as f:
+                all_data = json.load(f)
+            if key in all_data:
+                del all_data[key]
+                with open(PENDING_BROADCASTS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(all_data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
 
 def _save_subscribers(subscribers: Set[str]):
     """Internal helper to save subscribers to subscribers.json."""

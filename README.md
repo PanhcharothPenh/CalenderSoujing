@@ -17,10 +17,12 @@ A modern, fast Google Calendar & Monthly Score Announcement Telegram Bot built w
   - `🔕 លុបការចុះឈ្មោះ`
   - `ℹ️ ការណែនាំ`
 
-## 👑 Admin Commands
-- `/broadcast <សារ ឬចំណងជើង>` : ផ្ញើសារ ឬផ្សាយដំណឹងទៅកាន់ Subscribers ទាំងអស់។
-- ផ្ញើរូបភាព ឬ File PDF/Excel ដោយដាក់ Caption ` /broadcast <ព័ត៌មានបន្ថែម>` ដើម្បីផ្ញើតារាងពិន្ទុទៅកាន់ Subscribers ទាំងអស់។
-- Reply លើរូបភាព ឬ File ណាមួយ រួចវាយ `/broadcast` ដើម្បីផ្សាយសារនោះជាផ្លូវការ។
+## 👑 Admin Features (ផ្ញើតារាងពិន្ទុ ឬផ្សាយដំណឹង)
+- **វិធីទី១ (ងាយស្រួលបំផុត - 1-Click):**
+  - Admin គ្រាន់តែផ្ញើ ឬ Forward រូបភាព ឬ File PDF ចូលក្នុង Chat ជាមួយ Bot (មិនបាច់វាយពាក្យអ្វីទាំងអស់)។
+  - Bot នឹងសួរភ្លាមៗជាមួយប៊ូតុង `[📢 ផ្សាយទៅកាន់សិស្សទាំងអស់]`។ ចុចតែ ១ ឃ្លីក រួចជាស្រេច!
+- **វិធីទី២ (Command):**
+  - `/broadcast <សារ>` ឬដាក់ Caption `/broadcast` លើរូបភាព ឬ Reply លើ File ចាស់។
 
 ## 🚀 Deployment on Vercel
 1. Import repository `PanhcharothPenh/CalenderSoujing` into Vercel.

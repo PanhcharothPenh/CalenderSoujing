@@ -7,13 +7,22 @@ import urllib.request
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Set
+import uuid
 import pytz
 
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, BotCommand
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    BotCommand,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ContextTypes,
     filters,
 )
@@ -34,13 +43,21 @@ logger = logging.getLogger(__name__)
 calendar_mgr = GoogleCalendarManager()
 sent_reminders: Set[str] = set()
 
-def get_main_keyboard() -> ReplyKeyboardMarkup:
+def get_main_keyboard(is_admin_user=False) -> ReplyKeyboardMarkup:
     """Generate permanent Khmer Telegram keyboard buttons."""
-    keyboard = [
-        [KeyboardButton("📅 Event ថ្ងៃនេះ"), KeyboardButton("📆 Event ៧ថ្ងៃខាងមុខ")],
-        [KeyboardButton("📊 តារាងពិន្ទុ"), KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ")],
-        [KeyboardButton("🔕 លុបការចុះឈ្មោះ"), KeyboardButton("ℹ️ ការណែនាំ")]
-    ]
+    if is_admin_user:
+        keyboard = [
+            [KeyboardButton("📅 Event ថ្ងៃនេះ"), KeyboardButton("📆 Event ៧ថ្ងៃខាងមុខ")],
+            [KeyboardButton("📊 តារាងពិន្ទុ"), KeyboardButton("📢 ផ្សាយតារាងពិន្ទុ")],
+            [KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ"), KeyboardButton("🔕 លុបការចុះឈ្មោះ")],
+            [KeyboardButton("ℹ️ ការណែនាំ")]
+        ]
+    else:
+        keyboard = [
+            [KeyboardButton("📅 Event ថ្ងៃនេះ"), KeyboardButton("📆 Event ៧ថ្ងៃខាងមុខ")],
+            [KeyboardButton("📊 តារាងពិន្ទុ"), KeyboardButton("🔔 ចុះឈ្មោះទទួលសារ")],
+            [KeyboardButton("🔕 លុបការចុះឈ្មោះ"), KeyboardButton("ℹ️ ការណែនាំ")]
+        ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -392,12 +409,165 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 async def handle_media_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Intercept media uploads that have a broadcast command in their caption."""
+    """Intercept media uploads. If Admin, provide 1-click broadcast confirmation."""
     if not update.message:
         return
+    chat_id = update.message.chat_id
+    if not config.is_admin(chat_id):
+        return
+
     caption = update.message.caption or ""
+    photos = update.message.photo
+    document = update.message.document
+
+    # If explicit /broadcast caption used, trigger immediate broadcast
     if any(caption.lower().startswith(cmd) for cmd in ["/broadcast", "/announce", "/score_broadcast", "/post_score", "📢 ផ្សាយដំណឹង"]):
         await broadcast_command(update, context)
+        return
+
+    # Easy 1-Click: Admin sent photo or document without command
+    bcast_key = str(uuid.uuid4())[:8]
+    file_type = "photo" if photos else "document"
+    file_id = photos[-1].file_id if photos else document.file_id
+    file_name = document.file_name or "Monthly_Score.pdf" if document else None
+
+    config.save_pending_broadcast(bcast_key, {
+        "type": file_type,
+        "file_id": file_id,
+        "file_name": file_name,
+        "caption": caption,
+        "admin_id": chat_id
+    })
+
+    subscribers = config.load_subscribers()
+    type_name = "រូបភាពតារាងពិន្ទុ (Photo)" if photos else f"ឯកសារ ({file_name})"
+    confirm_text = (
+        "📥 <b>បានទទួលឯកសារ/រូបភាពតារាងពិន្ទុ!</b>\n\n"
+        f"📄 ប្រភេទ: <b>{type_name}</b>\n"
+        f"👥 សិស្សទទួលសារ (Subscribers): <b>{len(subscribers)} នាក់</b>\n"
+        f"💬 ចំណាំ (Caption): <i>{caption or 'គ្មាន'}</i>\n\n"
+        "👇 <b>តើអ្នកចង់ផ្សាយដំណឹងនេះទៅកាន់សិស្សទាំងអស់ដែរឬទេ?</b>"
+    )
+    inline_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📢 ផ្សាយទៅកាន់សិស្សទាំងអស់", callback_data=f"bcast:{bcast_key}")],
+        [InlineKeyboardButton("❌ បោះបង់", callback_data=f"cancel:{bcast_key}")]
+    ])
+    await update.message.reply_text(
+        confirm_text,
+        parse_mode="HTML",
+        reply_markup=inline_kb
+    )
+
+async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle 1-click broadcast confirmation or cancel."""
+    query = update.callback_query
+    if not query:
+        return
+
+    user_id = query.from_user.id
+    if not config.is_admin(user_id):
+        await query.answer("⛔ អ្នកមិនមានសិទ្ធិប្រើប្រាស់មុខងារនេះទេ!", show_alert=True)
+        return
+
+    data = query.data or ""
+    if data.startswith("bcast:"):
+        key = data.split(":", 1)[1]
+        pending = config.get_pending_broadcast(key)
+        if not pending:
+            await query.answer("⚠️ ឯកសារនេះផុតកំណត់ ឬត្រូវបានផ្សាយរួចហើយ!", show_alert=True)
+            return
+
+        await query.answer("🚀 កំពុងផ្សាយដំណឹងទៅកាន់សិស្សទាំងអស់...")
+        subscribers = config.load_subscribers()
+        tz = pytz.timezone(config.TIMEZONE)
+        now_str = datetime.datetime.now(tz).strftime('%d/%m/%Y %I:%M %p')
+
+        b_type = pending.get("type")
+        file_id = pending.get("file_id")
+        file_name = pending.get("file_name", "Monthly_Score.pdf")
+        user_caption = pending.get("caption", "").strip()
+
+        header = "📢 <b>តារាងពិន្ទុប្រចាំខែ (Monthly Score Report)</b> 📊\n"
+        final_caption = f"{header}\n{user_caption}\n\n🗓️ <i>{now_str}</i>" if user_caption else f"{header}\nសូមពិនិត្យមើលតារាងពិន្ទុខាងលើ!\n\n🗓️ <i>{now_str}</i>"
+
+        sent_count = 0
+        fail_count = 0
+
+        if b_type == "photo":
+            for sub_id in subscribers:
+                try:
+                    await context.bot.send_photo(chat_id=sub_id, photo=file_id, caption=final_caption, parse_mode="HTML")
+                    sent_count += 1
+                except Exception:
+                    fail_count += 1
+            config.save_latest_score({
+                "type": "photo",
+                "file_id": file_id,
+                "caption": final_caption,
+                "date": now_str,
+                "sender_id": user_id
+            })
+
+        elif b_type == "document":
+            doc_caption = f"{header}\n📄 ឯកសារ: <code>{file_name}</code>\n\n{user_caption or 'សូមទាញយកឯកសារតារាងពិន្ទុខាងលើ!'}\n\n🗓️ <i>{now_str}</i>"
+            for sub_id in subscribers:
+                try:
+                    await context.bot.send_document(chat_id=sub_id, document=file_id, caption=doc_caption, parse_mode="HTML")
+                    sent_count += 1
+                except Exception:
+                    fail_count += 1
+            config.save_latest_score({
+                "type": "document",
+                "file_id": file_id,
+                "file_name": file_name,
+                "caption": doc_caption,
+                "date": now_str,
+                "sender_id": user_id
+            })
+
+        config.remove_pending_broadcast(key)
+
+        report = (
+            "✅ <b>បានផ្សាយដំណឹង/តារាងពិន្ទុជូនសិស្សទាំងអស់ជោគជ័យ!</b>\n\n"
+            f"👥 អ្នកទទួលបាន: <b>{sent_count}</b> នាក់\n"
+            f"⚠️ បរាជ័យ: <b>{fail_count}</b> នាក់\n"
+            f"🕒 កាលបរិច្ឆេទ: <b>{now_str}</b>"
+        )
+        try:
+            await query.edit_message_text(text=report, parse_mode="HTML")
+        except Exception:
+            await query.message.reply_text(text=report, parse_mode="HTML")
+
+    elif data.startswith("cancel:"):
+        key = data.split(":", 1)[1]
+        config.remove_pending_broadcast(key)
+        await query.answer("បានបោះបង់!")
+        try:
+            await query.edit_message_text(text="❌ <b>បានបោះបង់ការផ្សាយដំណឹង។</b>", parse_mode="HTML")
+        except Exception:
+            pass
+
+async def admin_prompt_score_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Guide admin on how to easily send score file."""
+    if not update.message:
+        return
+    is_admin = config.is_admin(update.message.chat_id)
+    if not is_admin:
+        await update.message.reply_text(
+            "⛔ <b>មុខងារនេះសម្រាប់តែ Administrator ប៉ុណ្ណោះ!</b>",
+            parse_mode="HTML"
+        )
+        return
+    prompt_msg = (
+        "📤 <b>សូមផ្ញើរូបភាព ឬ File PDF តារាងពិន្ទុមកកាន់ទីនេះ៖</b>\n\n"
+        "• អ្នកគ្រាន់តែផ្ញើ ឬ Forward រូបភាព ឬ File PDF ចូលក្នុង Chat នេះ (ដោយមិនបាច់វាយពាក្យអ្វីទាំងអស់)\n"
+        "• រួច Bot នឹងបង្ហាញប៊ូតុង <code>[📢 ផ្សាយទៅកាន់សិស្សទាំងអស់]</code> ឱ្យចុចបញ្ជាក់ភ្លាមៗ! ⚡"
+    )
+    await update.message.reply_text(
+        prompt_msg,
+        parse_mode="HTML",
+        reply_markup=get_main_keyboard(is_admin_user=True)
+    )
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /today command."""
@@ -484,6 +654,8 @@ async def handle_button_click(update: Update, context: ContextTypes.DEFAULT_TYPE
         await today_command(update, context)
     elif "Event ៧ថ្ងៃ" in text or "៧ថ្ងៃ" in text or "ជិតមកដល់" in text:
         await upcoming_command(update, context)
+    elif "ផ្សាយតារាងពិន្ទុ" in text:
+        await admin_prompt_score_upload(update, context)
     elif "តារាងពិន្ទុ" in text or "ពិន្ទុ" in text:
         await score_command(update, context)
     elif "ចុះឈ្មោះទទួលសារ" in text or "ចុះឈ្មោះ" in text:
@@ -661,6 +833,9 @@ def main():
 
     # Register Media broadcast handler (Photos and Documents with /broadcast caption)
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_media_broadcast))
+
+    # Register 1-Click Callback Query Handler
+    application.add_handler(CallbackQueryHandler(handle_callback_query))
 
     # Register Keyboard Button Message Handler
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_button_click))
